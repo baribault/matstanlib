@@ -3,7 +3,9 @@
 --- a library of helper functions for MATLAB interfaces to Stan ----------
 --------------------------------------------------------------------------
 
-this library 
+this library contains functions to assist MATLAB users in processing, 
+analyzing, and --- most of all --- visualizing MCMC samples and diagnostic 
+output from various interfaces to Stan (mc-stan.org).  
 
 the library also contains a few scripts with examples of proper usage.  
 
@@ -43,13 +45,12 @@ I have tried to ensure that this package has good documentation.
 typing 'help FUNCTIONNAME' at the command line will give information on how 
 to call each function.  scripts are heavily commented. 
 
-however, please also note that this library is a work in progress.  
-only those functions/scripts listed below as DONE are completed.  
-if there is no DONE note, the file may not be written yet or, if it is 
-written, is still being worked on, and is not guaranteed to not produce 
-errors (either thrown or silent). 
-
+however, please also note that this library is a work in progress.  while most
+functions and scripts are complete, a few are still being actively worked on, 
+and so are not guaranteed to be free of errors (either thrown or silent). 
 code may be updated or refactored at any time.  
+
+once the library is in a satisfactory state, I will make an official release.
 
 this code currently requires that MATLAB's Statistics Toolbox be installed.
 
@@ -72,37 +73,46 @@ PLOTTING
     > overlaydensity.m              overlays one or more univariate densities
     > jointdensity.m                plots a bivariate denisty & marginals
     > multidensity.m                plots a matrix of bivariate densities
-    > violindensity.m               plots violin densities for multiple parameters
     > horzdensity.m                 plots smoothed densities for multiple parameters
+    > violindensity.m               plots violin densities for multiple parameters
 ---PARAMETER ESTIMATES
     > plotrecovery.m                plots recovery (true vs. estimated parameter values)
-    > plotintervals.m               plots credible intervals for multiple instances
+    > plotintervals.m               plots credible intervals for parameter instances
 ---PREDICTIVES
     > postpredhist.m                ...
 ---DIAGNOSTICS
+    > tracedensity.m                plots chain traces
+    > rankplots.m                plot one rank plot per chain
     > plotlp.m                      plots lp__ and other diagnostic quantites
-    > parcoordivergent.m            ...
+    > parcoordivergent.m            plots joint posterior samples across parameters
     > plotdivergences.m             plots divergent transitions, one rug plot per chain
+---MISC
+    > hyperpriortester.m            plots simulated priors for given hyperpriors
 
 --------------------------------------------------------------------------
 
 STAN OUTPUT MANIPULATION
     > extractsamples.m              reformat output from a MATLAB interface to Stan
-    > getparaminstances.m           ... *** supercedes extractparamnames.m ***
+    > getparaminstances.m           generates a list of (indexed) parmeter instances
     > removechain.m                 toss a chain
-    > manualburn.m                  toss some iterations
+    > removeiters.m                 toss some iterations
+    > transformparameterization.m   apply known reparameterizations post-hoc
 
 --------------------------------------------------------------------------
 
 STAN OUTPUT DIAGNOSTICS
+    > computeess.m                  computes effecive sample size
+    > computerhat.m                 computes Rhat
+    > mcmctable.m                   generates a table of MCMC diagnostics & summary stats
+    > interpretdiagnostics.m        interprets MCMC diagnostics and prints a report
     > rhattable.m                   ...
-    > interpretdiagnostics.m        ...
 
 --------------------------------------------------------------------------
 
 STAN BASIC ANALYSIS
     > smoothdensity.m               estimates a posterior density with kernel smoothing
-    > getsamplestats.m              computes common estimates from posterior samples
+    > getsamplestats.m              collects summary statistics for posterior samples
+    > computecredint.m              computes a credible interval
     > computeWAIC.m                 computes WAIC from log_lik samples
     > savagedickey.m                computes a Savage-Dickey Bayes factor
 
@@ -110,23 +120,26 @@ STAN BASIC ANALYSIS
 
 STAN BASIC MODELS & SCRIPTS
     > skeleton.m                    bare bones outline of a script
-    > example_funnel.m              Neal's funnel generates divergent transitions
-    > example_correlation.m         Pearson correlation, plots & a Bayes factor
-    > example_RL.m                  reinforcement learning, a hierarchical cognitive model
+    > example_funnel.m              Neal's funnel; generates divergent transitions
+    > example_funnel_bg.m           Betancourt & Giorolami's funnel
+    > example_funnel_ncp.m          hierarchical funnel; non-centered parameterization
+    > example_correlation.m         Pearson correlation; plots & a Bayes factor
+    > example_RL.m                  reinforcement learning; a hierarchical cognitive model
     > example_eightschools.m        ???
     > example_figures.m             *** recreates the figures in [matstanlib paper] ***
 
 --------------------------------------------------------------------------
 
 MISC MATSTANLIB HELPERS
-    > collecttruevalues.m           ...
+    > writestanfile.m               writes a cell of Stan code strings to a .stan file
+    > collecttruevalues.m           generates a structure of true parameter values
     > str2ind.m                     (called by many matstanlib functions)
-    > reindexvector.m               useful for converting a vector to sequential indices
+    > reindexvector.m               converts a vector of values to sequential indices
 
 --------------------------------------------------------------------------
 
 MISC
-    > getdeps.m                     ...
+    > getdeps.m                     prints a dependency report for an .m file
 
 --------------------------------------------------------------------------
 --------------------------------------------------------------------------
