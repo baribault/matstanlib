@@ -3,9 +3,9 @@
 --- a library of helper functions for MATLAB interfaces to Stan ----------
 --------------------------------------------------------------------------
 
-this library contains functions processing, analyzing, and visualize 
-posterior samples and diagnostic quantities from MATLAB interfaces to Stan 
-(mc-stan.org).  currently supported interfaces include:
+this library contains functions for processing, analyzing, and visualizing 
+MCMC-generated posterior samples and diagnostic quantities returned by a 
+MATLAB interfaces to Stan (mc-stan.org), such as:
         MATLABStan  >>  https://github.com/brian-lau/MatlabStan
         Trinity     >>  https://github.com/joachimvandekerckhove/trinity
 
