@@ -1,0 +1,39 @@
+********** BBSTANLIB's name has changed!!!! **********
+the library will hereafter be known as MATSTANLIB.
+
+
+********** BIG CHANGES **********
+- added CALCULATEWAIC (which accepts samples of log likelihood).
+- added PLOTDIVERGENCES. this generates a rug plot of divergences BY CHAIN.  (if all divergences are seen in a single chain, you can just remove the chain with REMOVECHAIN.)
+- you can now use a wildcard in parameter requests!!!!!
+        e.g., say beta is indexed by participant and subject.  you can now request 'beta[*,1]'
+        e.g., say your hyperparameters for beta are mu_beta[1], mu_beta[2] and sigma_beta --- you can now request all of these with '*_beta*'
+- MULTIDENSITY can now highlight divergent samples in RED as an overlay.
+- INTERPRETDIAGNOSTICS now outputs 1 if the convergernce/divergence criteria have been satisfied, and 0 otherwise.  (this is useful for automating re-running a model if not converged.)
+- TRACEDIVERGENT can now accomodate a parameter request (and thus generate multiple plots in a single call) **********************************
+- changed the name of POSTERIORPRED to POSTPREDHIST to avoid reasonably expected conflicts.
+- EXPANDPARAMNAMES will be removed in a future release.  please edit your scripts to instead use the new function GETPARAMINSTANCES.
+- added GETPARAMINSTANCES.  this function takes in a SAMPLES structure and returns the names of all parameter instances (i.e., indexed parameters).  note that:
+    --- this function supersedes EXPANDPARAMNAMES.
+    --- there is a user-friendly, default syntax for this function which accepts SAMPLES directly, intended to be used when called from a script
+    --- there is a RAM-friendly, alternative syntax for this function which does not require passing SAMPLES, intended to be used when called from a function (i.e., to avoid storing multiple copies of SAMPLES in memory)
+- added EXTRACTSAMPLES_TRINITY for users who wish to use Trinity in place of MATLABStan.
+- added COMPUTEHDI for computing highest-density intervals (HDIs).  
+
+
+********** MEDIUM CHANGES **********
+- line colors in PLOTLP now match line colos in TRACEDENSITY and TRACEDIVERGENT for easier reconciling.
+- the rug plot of divergences seen in PLOTLP and TRACEDIVERGENT is now chain-by-chain.
+- MULTIDENSITY no longer returns a matrix of handles --- so no need to add a trailing semicolon to calls to this function
+- CATERPLOT now displays 50% credible intervals (thick lines) in addition to 95% credible intervals (thin lines).
+- CATERPLOT can now 
+    --- accept a custom sorting order.  
+    --- return the sorting order seen on the plot.
+- CATERPLOT now returns a matrix of indices matching the sorting order.
+- you may now submit a custom color to CATERPLOT. 
+- you may now submit a custom fill, outline, and marker color to VIOLINDENSITY.
+
+
+********** SMALL CHANGES **********
+- cosmetic changes to various plotting functions.
+- many small edits to SKELETON (the base MATSTANLIB script)
