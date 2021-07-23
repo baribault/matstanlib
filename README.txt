@@ -5,7 +5,7 @@
 
 this library contains functions for processing, analyzing, and visualizing 
 MCMC-generated posterior samples and diagnostic quantities returned by any 
-MATLAB interface to Stan (mc-stan.org), such as:
+MATLAB interface to Stan (https://mc-stan.org/), such as:
         MATLABStan  >>  https://github.com/brian-lau/MatlabStan
         Trinity     >>  https://github.com/joachimvandekerckhove/trinity
 
