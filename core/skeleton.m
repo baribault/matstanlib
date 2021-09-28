@@ -1,16 +1,20 @@
 
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-%%% this file is a skeleton of a script for running your own Stan      %%%
-%%% models with Stan, MATLABStan, and matstanlib.                      %%%
-%%% (c) beth baribault 2019 ---                           > matstanlib %%%
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%% this file is a skeleton of a script that you may use as a starting  %%%
+%%% point for your own code with Stan, MATLABStan, and matstanlib.      %%%
+%%%                                                                     %%%
+%%% (c) beth baribault 2019 ---                            > matstanlib %%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
-%% a bare bones outline of a model fitting script
+
+
+
+%% a bare bones outline of a Bayesian model fitting script
 % 
 % ...
 % 
 % to run this script, the following must be installed: 
-%       Stan        >>  https://mc-stan.org/
+%       Stan        >>  https://mc-stan.org/users/interfaces/cmdstan.html
 %       MATLABStan  >>  https://github.com/brian-lau/MatlabStan
 %       matstanlib  >>  https://github.com/baribault/matstanlib
 %
@@ -27,23 +31,38 @@ modelName = 'my_model_name';
 %sampler settings
 nChains     = 4;        %how many chains?
 nWarmup     = 1000;     %how many iterations during warmup?
-nIterations = 1000;     %how many iterations after warmup?
+nIterations = 2000;     %how many iterations after warmup?
 
-%an absolute path to a location for (temporary) Stan output files
-% workingDir = '\my\custom\folder\';    %%% windows
-% workingDir = '/my/custom/folder/';    %%% macOS, linux
+%an absolute path to a location for saved model output, figures, etc.:
+% outputDir = 'X:\\my\custom\dir\'; %%% windows
+% outputDir = '~/my/custom/dir/';   %%% macOS, linux
+outputDir = [pwd filesep 'stan_output_' modelName];
+
+%an absolute path to a (temporary) location for Stan output files:
 workingDir = [pwd filesep 'wdir_' modelName];
 
-%delete all temp files after stan finishes and selected output is saved?
+%delete temporary files after Stan finishes and output has been returned?
 %(this helps prevent compilation conflicts, etc.)
 cleanUp = true;
 
-%% prepare for output
-fprintf('\n\n**********\n\npreparing to run the ''%s'' model.\n', ...
-    modelName)
+%% setup
+fprintf('\n\n************\n\npreparing to run the %s model.\n',modelName)
+
+%ensure all directories inputs end in a file separator
+if ~isequal(outputDir(end),filesep), outputDir(end+1) = filesep; end
+if ~isequal(workingDir(end),filesep), workingDir(end+1) = filesep; end
+
+%output directory
+fprintf(['\nmodel output and figures will be saved to the output directory:\n' ...
+    '> %s\n'], outputDir)
+if ~exist(outputDir,'dir')
+    fprintf(['    currently this directory does not exist.  \n' ...
+        '    making the directory now ... '])
+    mkdir(outputDir)
+    fprintf('done.\n')
+end
 
 %working directory
-if ~isequal(workingDir(end),filesep), workingDir(end+1) = filesep; end
 fprintf(['\nStan files will be saved to the working directory:\n' ...
     '> %s\n'], workingDir)
 if ~exist(workingDir,'dir')
@@ -54,8 +73,8 @@ if ~exist(workingDir,'dir')
 end
 
 %% data
-% disp('simulating data ... ')
-% disp('loading data ... ')
+% disp('\nsimulating data ... ')
+% disp('\nloading data ... ')
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %%% either simulate or load data here %%%
@@ -64,7 +83,7 @@ end
 %collect data for Stan
 dataStruct = struct('%%%%%%%%%%%');
 
-% disp('done!')
+% disp('done!\n')
 
 %% model specification
 
@@ -95,42 +114,36 @@ modelCode = {
     '}'
     ''
     'generated quantities {'
-    '  //predicitive distributions and other tracked quantites go here.'
+    '  //predictive distributions and other quantites to track go here.'
     '  //...'
     '}'
 };
 
 %write the model code to a .stan file
-stanFile = [workingDir modelName '.stan'];
-stanFileID = fopen(stanFile,'w');
-fprintf(stanFileID,'%s\n',modelCode{:});
-fclose(stanFileID);
-%copy the .stan file to current directory
-copyfile(stanFile,pwd)
+stanFilePath = writestanfile(modelCode,modelName,workingDir);
 
 %% compile the model
 tic
 fprintf('\ncompiling the model ... ')
-sm = StanModel('file',stanFile);
+sm = StanModel('file',stanFilePath);
 sm.compile();
 fprintf('done!\n')
 fprintf('compiling took %.2f seconds.\n',toc)
 
 %% run the model
 tic
-fprintf('\nrunning the model ... \n\n**********\n\n')
-fit =  sm.sampling('file',  stanFile, ...
-            'model_name',   modelName, ...
-            'sample_file',  modelName, ...
-            'data',         dataStruct, ...
-            'chains',       nChains, ...
-            'warmup',       nWarmup, ...
-            'iter',         nIterations, ...
-            'verbose',      true, ...
-            'working_dir',  workingDir);
+fprintf('\nrunning the model ... \n\n************\n\n')
+fit =  sm.sampling('file',  stanFilePath, ...
+                   'model_name',   modelName, ...
+                   'sample_file',  modelName, ...
+                   'verbose',      true, ...
+                   'chains',       nChains, ...
+                   'warmup',       nWarmup, ...
+                   'iter',         nIterations, ...
+                   'working_dir',  workingDir);
 fit.block();
-stan_summary = fit.print;
-fprintf('\n**********\n\ndone!\n')
+[stanSummaryTxt,stanSummary] = fit.print('sig_figs',5);
+fprintf('\n************\n\ndone!\n\n')
 
 runtime = datevec(seconds(toc));
 fprintf(['sampling took %i days, %i hours, %i minutes, ' ...
@@ -138,37 +151,41 @@ fprintf(['sampling took %i days, %i hours, %i minutes, ' ...
                                            %model takes < 1 month to run :)
 
 %% extract from the StanFit object
-[samples,diagnostics] = extractsamples('matlabstan',fit);
+[samples,diagnostics] = extractsamples('MATLABStan',fit);
 parameters = fieldnames(samples);
 instances = getparaminstances([],samples);
 
 %clean up after MATLABStan
 clearvars fit
 %clean up after Stan
-if cleanUp
-    delete([workingDir '*'])
-    rmdir(workingDir)
-end
+if cleanUp, delete([workingDir '*']); rmdir(workingDir); end
 
-%% diagnostics
-%calculate convergence diagnostics based on the posterior samples
-rtable = rhattable(samples);
-%print a report about all diagnostics
-interpretdiagnostics(diagnostics,rtable)
+%% save output
+save([pwd filesep modelName '.mat'])
 
-%trace plots
-tracedensity(samples,diagnostics)
+%% diagnostic reports & plots
+%compute posterior sample-based diagnostics and summary statistics
+posteriorTable = mcmctable(samples);
+%print a report about all MCMC diagnostics
+interpretdiagnostics(diagnostics,posteriorTable)
+
+%trace plots/rank plots
+tracedensity(samples,'???',diagnostics)
+rankplots(samples,'???')
 
 %% parameter estimates & model comparison & other statistics
 estimatedValues = getsamplestats(samples);
 % estimatedValues = getsamplestats(samples,trueValues);
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-%%%   compute other statistics here   %%%
+%%%   call plotting functions, etc.   %%%
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
-%% save output
-save([pwd filesep modelName '.mat'])
+%% other analyses
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%%   compute other statistics here   %%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
 %% generate plots
 
