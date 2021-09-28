@@ -63,9 +63,9 @@ end
 fprintf('\nloading data ... ')
 
 %collect data for Stan
-data = struct('J',8, ...
-              'y',[28 8 -3 7 -1 1 18 12],...
-              'sigma',[15 10 16 11 9 11 10 18]);
+dataStruct = struct('J',8, ...
+                    'y',[28 8 -3 7 -1 1 18 12],...
+                    'sigma',[15 10 16 11 9 11 10 18]);
 
 fprintf('done!\n')
 
@@ -74,17 +74,19 @@ fprintf('done!\n')
 modelCode = {
     '//from Section 5.5 of Gelman et al (2003)'
     'data { '
-    '  int<lower=0> J;                    //number of schools'
-    '  real y[J];                         //estimated treatment effects'
-    '  real<lower=0> sigma[J];            //standard error of effect estimates'
+    '  int<lower=0> J;              //number of schools'
+    '  real y[J];                   //estimated treatment effect'
+    '  real<lower=0> sigma[J];      //standard error of the effect estimate'
     '}'
     'parameters { '
-    '  vector[2] mu;                      //population treatment effect'
-    '  vector<lower=0>[2] tau;            //standard deviation in treatment effects'
-    '  vector[J] eta;        //unscaled deviation from mu by school'
+    '  real mu;                     //population treatment effect'
+    '  real<lower=0> tau;           //standard deviation in treatment effects'
+    '  vector[J] eta;               //unscaled deviation from mu by school'
     '}'
     'transformed parameters {'
-    '  vector[J] theta = mu + tau * eta;  //school treatment effects'
+    '  vector[J] theta;             //school treatment effects'
+    '  for (j in 1:J) '
+    '    theta[j] = mu + tau * eta[j];'
     '}'
     'model { '
     '  eta ~ normal(0,1);'
@@ -106,14 +108,15 @@ fprintf('compiling took %.2f seconds.\n',toc)
 %% run the model
 tic
 fprintf('\nrunning the model ... \n\n************\n\n')
-fit =  sm.sampling('file',  stanFilePath, ...
-                   'model_name',   modelName, ...
-                   'sample_file',  modelName, ...
-                   'verbose',      true, ...
-                   'chains',       nChains, ...
-                   'warmup',       nWarmup, ...
-                   'iter',         nIterations, ...
-                   'working_dir',  workingDir);
+fit =  sm.sampling('file',          stanFilePath, ...
+                   'model_name',    modelName, ...
+                   'sample_file',   modelName, ...
+                   'verbose',       true, ...
+                   'chains',        nChains, ...
+                   'warmup',        nWarmup, ...
+                   'iter',          nIterations, ...
+                   'data',          dataStruct, ...
+                   'working_dir',   workingDir);
 fit.block();
 [stanSummaryTxt,stanSummary] = fit.print('sig_figs',5);
 fprintf('\n************\n\ndone!\n')
@@ -136,6 +139,6 @@ posteriorTable = mcmctable(samples);
 interpretdiagnostics(diagnostics,posteriorTable)
 
 %trace plots/rank plots
-rankplots(samples)
+rankplots(samples,{'mu','tau'})
 
 %% 
