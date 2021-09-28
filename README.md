@@ -12,11 +12,13 @@ The library is designed to be used in conjunction with Stan and one of the MATLA
 
 As such, to use matstanlib you first must have a valid standalone installation of Stan:
 * CmdStan: https://mc-stan.org/users/interfaces/cmdstan.html
+
 Please follow the installation instructions specific to your operating system, which are included in CmdStan's User's Guide.  You can verify your installation is working by also following the User's Guide instructions for the `bernoulli` example.  
 
 You should also have a recent version of MATLAB, including "stats toolbox":
 * MATLAB R2020a or later
 * MATLAB's Statistics and Machine Learning Toolbox
+
 To check if stats toolbox is installed, at the MATLAB command line run: `help ksdenisty`.  If MATLAB returns `ksdensity not found.`, then stats toolbox is not yet installed. 
 
 Finally, you will need one of the following MATLAB interfaces to Stan:
@@ -24,6 +26,7 @@ Finally, you will need one of the following MATLAB interfaces to Stan:
 ** Note: MatlabStan is not actively maintained and its code requires editing to work correctly with recent releases of Stan.  
 * Trinity: https://github.com/joachimvandekerckhove/trinity
 ** Note: Trinity is not actively maintained, but works without error recent Stan versions.
+
 Please follow the installation instructions provided with your chosen interface. 
 
 matstanlib is currently being actively tested on MATLAB R2021a, CmdStan v2.27.0, and a fork of MATLABStan.  
