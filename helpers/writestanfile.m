@@ -83,7 +83,7 @@ if isfile(stanFilePath)
 end
 
 %write the model code to a .stan file
-stanFileID = fopen(stanFilePath,'w');
+stanFileID = fopen(stanFilePath,'w+');
 for n = 1:length(modelCode)
     if n < length(modelCode)
         fprintf(stanFileID,'%s\n',modelCode{n});
