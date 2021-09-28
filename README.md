@@ -36,5 +36,6 @@ addpath(genpath('/path/to/matstanlib'))
 ```
 To ensure matstanlib is always available, I recommend that you add the above line (with a real path, of course) your `startup.m` file. 
 
-## Introduction 
-You may begin by running the `example_correlation` script.  
+
+## Getting started
+Check out the scripts in the `example` folder to see how matstanlib may be used in a variety of context.  You can also open up `skeleton.m' to get started writing your own modeling scripts.  
