@@ -47,7 +47,7 @@ nIterations = size(samples.(parameters{1}),1);
 if isscalar(badIters)
     %burn first N iterations
     nBadIters = badIters;
-    badIters = (nBadIters+1):nIterations;
+    badIters = 1:nBadIters; %(nBadIters+1):nIterations;
 else
     %remove the given indices
     badIters = unique(badIters);

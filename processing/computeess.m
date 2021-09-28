@@ -1,7 +1,9 @@
 function ESS = computeess(chains,method,alpha)
 %COMPUTEESS computes the effective sample size (ESS) from posterior samples.  
-%   
+% 
 % ESS = COMPUTEESS(CHAINS,TYPE)
+% ESS = COMPUTEESS(CHAINS,'quantile',ALPHA)
+% ESS = COMPUTEESS(CHAINS,'local',ALPHA)
 %   this function computes ESS, the estimated effective sample size, from 
 %   CHAINS, a [nIterations nChains]-sized matrix of posterior samples.
 %   
@@ -13,11 +15,17 @@ function ESS = computeess(chains,method,alpha)
 %       'median'    >>  ESS for the posterior median
 %       'sd'        >>  ESS for the posterior standard deviation
 %     * 'quantile'  >>  ESS for a particular quantile, ALPHA
-%   
-% ESS = COMPUTEESS(CHAINS,'quantile',ALPHA)
-%   if TYPE is 'quantile', then an additional input, ALPHA, is required.
-%   ALPHA is the quantile for which to compute ESS, given as a proportion. 
-%   as such, ALPHA must be a scalar numeric value between 0 and 1.  
+%     * 'local'     >>  ESS for a particular quantile range, ALPHA
+% 
+%   if an above TYPE is marked with *, then an additional input, ALPHA, is
+%   also required.  
+%   if TYPE is 'quantile', then ALPHA is a **single number**, the quantile
+%   for which to compute ESS, given as a proportion.  
+%   if TYPE is 'local', then ALPHA must have **two elements**, the minimum
+%   and maximum quantiles bounding the local range for which to compute
+%   ESS, both given as a proportion.  the first element must be lower than
+%   the second. 
+%   in either case, ALPHA must be (a) numeric value(s) between 0 and 1.  
 %   
 %   for all of the above, current best computational practices are used. 
 % 
@@ -56,7 +64,7 @@ if ~isnumeric(chains) && ~ismatrix(chains)
 end
 
 %method
-validMethods = {'bulk','tail','mean','median','sd','quantile', ...
+validMethods = {'bulk','tail','mean','median','sd','quantile','local', ...
                 'BDA3','BDA2'};
 if nargin < 2
     %type is REQUIRED!
@@ -74,14 +82,31 @@ else
 end
 
 %alpha
-if isequal(method,'quantile')
+switch method
+    case 'quantile'
+        nAlpha = 1;
+        noAlphaErrMsg = ...
+            ['if ESS type is ''quantile'', then alpha (the ' ...
+            'requested ESS quantile, as a proportion), is required.'];
+    case 'local'
+        nAlpha = 2;
+        noAlphaErrMsg = ...
+            ['if ESS type is ''local'', then alpha (a two-element vector ' ...
+            'representing the inclusive minimum and maximum quantiles) ' ...
+            ' is required.'];
+end
+if ismember(method,{'quantile','local'})
     if nargin < 3
-        error(['if ESS type is ''quantile'', then alpha (the ' ...
-            'requested ESS quantile, as a proportion), is required.']) 
-    elseif ~isnumeric(alpha) || ~isscalar(alpha)
-        error('alpha must be a single numeric value.')
-    elseif alpha <= 0 || alpha >= 1
-        error('alpha must be in the interval (0,1).')
+        error(noAlphaErrMsg)
+    elseif ~isnumeric(alpha) || ~isequal(numel(alpha),nAlpha)
+        if nAlpha==1, error('alpha must be a single numeric value.')
+        else,         error('alpha must be a two-element numeric vector.')
+        end 
+    elseif any(alpha <= 0 | alpha >= 1)
+        error('alpha values must be in the interval (0,1).')
+    elseif nAlpha==2 && alpha(1)>=alpha(2)
+        error(['if alpha has two elements, the first element ' ...
+            'cannot be greater than or equal to the second.'])
     end
 end
 
@@ -90,33 +115,44 @@ end
 switch method
     % ------------------------------------------------------------------ %
     case 'BDA2'
-        ESS = ess_BDA2(chains);
+        ESS = msl.ess_BDA2(chains);
     % ------------------------------------------------------------------ %
     case 'BDA3'
-        ESS = ess_BDA3(splitchains(chains));
-        fprintf('BDA3            = %.5f\n',ESS)
-        ESS = ess_core(splitchains(chains));
-        fprintf('bulk split      = %.5f\n',ESS)
-        ESS = ess_tmp(splitchains(chains));
-        fprintf('bulk split       = %.5f [TEST]\n',ESS)
-        ESS = ess_core(ranknorm(splitchains(chains)));
-        fprintf('bulk split+norm = %.5f\n',ESS)
-        ESS = ess_tmp(ranknorm(splitchains(chains)));
-        fprintf('bulk split+norm = %.5f [TEST]\n',ESS)
+        ESS = msl.ess_BDA3(msl.splitchains(chains));
+        fprintf('BDA3      = %.5f\n',ESS)
         
+        ESS = msl.ess_core(msl.splitchains(chains));
+        fprintf('CORE      = %.5f\n',ESS)
         
-        ESS = ess_tmp(splitchains(chains));
+        ESS = msl.ess_tmp(msl.splitchains(chains));
+        fprintf('TMP       = %.5f [TEST]\n',ESS)
+        
     % ------------------------------------------------------------------ %
     case 'bulk'
-        ESS = ess_core(ranknorm(splitchains(chains)));
+        ESS = msl.ess_core(msl.ranknorm(msl.splitchains(chains)));
     case 'tail'
-        ESS_q5 = ess_core(ranknorm(splitchains(chains)),0.95);
-        ESS_q95 = ess_core(ranknorm(splitchains(chains)),0.05);
-        ESS = min([ESS_q5 ESS_q95]);
+        ESS_q05 = msl.ess_core(msl.ranknorm(msl.splitchains(chains)),0.95);
+        ESS_q95 = msl.ess_core(msl.ranknorm(msl.splitchains(chains)),0.05);
+        ESS = min([ESS_q05 ESS_q95]);
+    % ------------------------------------------------------------------ %
+    case 'mean'
+        ESS = msl.ess_core(msl.splitchains(chains));
+    case 'sd'
+        ESS_m = msl.ess_core(msl.splitchains(chains));
+        ESS_s = msl.ess_core(msl.splitchains(chains.^2));
+        ESS = min([ESS_m ESS_s]);
+    % ------------------------------------------------------------------ %
     case 'median'
-        ESS = ess_core(splitchains(chains),0.50);
+        ESS = msl.ess_core(msl.splitchains(chains),0.50);
+    case 'mad'
+        chains = abs(chains - median(chains(:)));
+        Ichains = chains <= median(chains(:));
+        ESS = msl.ess_core(msl.ranknorm(msl.splitchains(Ichains)));
     case 'quantile'
-        ESS = ess_core(splitchains(chains),alpha);
+        ESS = msl.ess_core(msl.splitchains(chains),alpha);
+    case 'local'
+        ESS = msl.ess_core(msl.splitchains(chains),alpha);
+    % ------------------------------------------------------------------ %
     otherwise
         error('not coded yet.')
 end
