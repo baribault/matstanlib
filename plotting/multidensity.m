@@ -1,4 +1,4 @@
-function multidensity(samples,parameterRequest,varargin)
+function multidensity(samples,varargin)
 %MULTIDENSITY creates a NxN matrix of plots of joint densities.
 % 
 % this function generates a single figure with NxN tiled subplots. 
@@ -33,60 +33,58 @@ function multidensity(samples,parameterRequest,varargin)
 %   [nIterations nChains]-sized matrix of indicators of divergent 
 %   transitions.
 % 
+% 
 % Example
-%   MULTIDENSITY(samples,{'mu','sigma','delta'})
+%   > multidensity(samples,{'mu','sigma','delta'})
+% 
 % 
 % See also SMOOTHDENSITY, PLOTDENSITY, JOINTDENSITY, VIOLINDENSITY, 
 %   EXTRACTSAMPLES
 % 
 % (c) beth baribault 2019 ---                                 > matstanlib 
 
-matstanlib_options
+msl.options
 
-%% check inputs
+%% parse inputs
 
 %samples
-if ~isstruct(samples)
+if nargin < 1 || ~isstruct(samples)
     error('the first input must be the samples structure.')
 end
 
-%parameterRequest
-if nargin < 2
-    %default is all parameters
-    parameterRequest = fieldnames(samples);
-end
-if ischar(parameterRequest)
-    %convert string to cell of strings
-    parameterRequest = {parameterRequest};
-end
-if ~iscell(parameterRequest) || ~all(cellfun(@ischar,parameterRequest))
-    error(['the parameterRequest input must be a parameter name ' ...
-           'string or cell of strings.'])
-end
+%%% optional inputs %%%
+parameterRequest = fieldnames(samples); %default
+overlayDivergent = false;               %default
+namesOnDiag = true;                     %default
 
-%diagnostics/divergent
-overlayDivergent = false;
-if nargin > 2
-    %highlight divergent transitions
-    if isstruct(varargin{1}) && isfield(varargin{1},'divergent__')
-        %diagnostic structure --- need to extract divergent__ field
-        divergent = varargin{1}.divergent__;
-    elseif isnumeric(varargin{1}) && ...
-            ismatrix(varargin{1}) && all(ismember(varargin{1},[0 1]))
+for v = 1:length(varargin)
+    %namesOnDiag
+    if islogical(varargin{v})
+        namesOnDiag = varargin{v};
+    elseif isnumeric(varargin{v}) && isscalar(varargin{v}) && ismember(varargin{v},[0 1])
+        namesOnDiag = varargin{v};
+    %overlayDivergent
+    elseif isnumeric(varargin{v}) && ismatrix(varargin{v}) && all(ismember(varargin{v}(:),[0 1]))
         %matrix of divergent indicators already extracted
-        divergent = varargin{1};
-    else
-        error(['the optional input must be either the diagnostics ' ...
-            'structure or a matrix of divergent transition indicators.'])
-    end
-    divergent = divergent(:);
-    if any(divergent==1)
+        divergent = varargin{v};
         overlayDivergent = true;
+    elseif isstruct(varargin{v}) && isfield(varargin{v},'divergent__')
+        %diagnostic structure --- need to extract divergent__ field
+        divergent = varargin{v}.divergent__;
+        overlayDivergent = true;
+    %parameterRequest
+    elseif ischar(varargin{v})
+        %convert parameter name string to cell of string
+        parameterRequest = {varargin{v}};
+    elseif iscell(varargin{v}) && all(cellfun(@ischar,varargin{v}))
+        parameterRequest = varargin{v};
+    else
+        error('unrecognized optional input type.')
     end
 end
+clearvars varargin
 
-
-if nargin > 3
+if nargin > 4
     error('too many inputs.')
 end
 
@@ -108,19 +106,36 @@ if np > 10
         'parameter instances.'])
 end
 
+biplotType = 'contour'; %be VERY cautious in changing this
+
 %number of levels for the contour plots
-nLevels = 8;
+nLevels = 6;
+
+%x-axis tick label rotation
+xTickAngle = 90; %45;
 
 %select colors
 % ... [on diagonal] smoothed univariate density
-marginalFcolor = 'none';%[1 1 1];%0.9*[1 1 1];
-marginalEcolor = [0 0 0];
-% ... [off diagonal] colormap for contour layer (lowest to hightest density)
-% cmap = makecolormap('white','black',128);
-cmap = makecolormap(0.925*[1 1 1],'black');
+if namesOnDiag
+    marginalFcolor = 'none';
+    marginalEcolor = getcolors('lightgray');%0.675*[1 1 1];
+else %marginalOnDiag
+    marginalFcolor = 'none';
+    marginalEcolor = getcolors('darkgray');%[0 0 0];
+end
 % ... [off diagonal] marker color for divergent transitions
 divergentColor = getcolors('red');
+% ... [off diagonal] colormap for contour layer (lowest to hightest density)
+lowProbColor = getcolors('lightgray','white','blend');
+highProbColor = 'darkblue';
+switch biplotType
+    case 'ksdensity'
+        cmap = makecolormap(lowProbColor,highProbColor,128);
+    case 'contour'
+        cmap = makecolormap(0.925*[1 1 1],highProbColor,nLevels);
+end
 
+%%
 % % % %test discrete
 % % % instances{1} = 'discrete';  isInstance(1) = 0;
 % % % samples.discrete = binornd(10,0.2, ...
@@ -134,44 +149,59 @@ fpos = fh.Position;
 fh.Position = [fpos(1:2) [125+125*np 75+125*np]*figScaling];
 close(dumf.Number) %close dummy figure
 %... and NxN axes
-tiledlayout(np,np,'tilespacing','none')%,'tileindexing')%,'columnmajor')
-
-contourForSpeed = true; %be VERY cautious in changing this
+tiledlayout(np,np,'tilespacing','none')%,'tileindexing','columnmajor') %only in 2021a+
 
 %on diagonal: univariate marginal posterior density
 for n = 1:(np*np)
+    %determine this axis' position within the grid of axes
+    [row,col] = ind2sub([np np],n); %via *column major* indexing
+    onDiagonal = row==col;    offDiagonal = ~onDiagonal;
     %select an axis
-    nexttile; hold on
+    ind = sub2ind([np np],col,row); %nexttile uses *row major* indexing
+    nexttile(ind); hold on
     %format this axis
     set(gca,'box','on','fontsize',fontSz)
-    %determine this axis' position within the grid of axes
-    [row,col] = ind2sub([np np],n);
-    onDiagonal = row==col;    offDiagonal = ~onDiagonal;
     
-    %move X/Y axis to the top/right for the topmost/righmost column of plots
-    if row==1, set(gca,'XAxisLocation','top'); end
-    if col==np, set(gca,'YAxisLocation','right'); end
+    %move X/Y axis to the top/right for the topmost/rightmost column of plots
+    if row==1  || row<col, set(gca,'XAxisLocation','top'); end
+    if col==np || row<col, set(gca,'YAxisLocation','right'); end
     
-    %if first row, add parameter name labels
-    %iff last row, include rotated tick labels
-    if row==1
-        title(instances{col},'interpreter','none','fontweight','bold')
-    end
-    if row < np
-        set(gca,'xticklabels',{})
+    %labels & ticks for the ... x-axis
+    if namesOnDiag
+        %if off diag, include rotated tick labels; otherwise no tick labels
+        if row==col || ~(row==1 || row==np)
+            set(gca,'xticklabels',{})
+        else
+            set(gca,'XTickLabelRotation',xTickAngle)
+        end
     else
-        set(gca,'XTickLabelRotation',90)
+        %if first row, add parameter name labels
+        if row==1
+            xlabel(instances{col},'interpreter','none','fontweight','bold')
+        end
+        %if last row, include rotated tick labels; otherwise no tick labels
+        if row < np
+            set(gca,'xticklabels',{})
+        else
+            set(gca,'XTickLabelRotation',xTickAngle)
+        end
     end
-    
-    %if first column, add parameter name labels
-    %iff last column, include tick labels
-    %*UNLESS* it is also the last row --- then flip!
-%     if col==1
-    if (col==1 && row<np) || (col==np && row==np)
-        ylabel(instances{row},'interpreter','none','fontweight','bold')
-    end
-    if ~((col==np && row<np) || (col==1 && row==np))
-        set(gca,'yticklabels',{})
+    %labels & ticks for the ... y-axis
+    if namesOnDiag
+        %if off diag, include tick labels; otherwise no tick labels
+        if row==col || ~(col==1 || col==np)
+            set(gca,'yticklabels',{})
+        end
+    else
+        %if first column, add parameter name labels
+        %iff last column, include tick labels
+        %*UNLESS* it is also the last row --- then flip!
+        if (col==1 && row<np) || (col==np && row==np)
+            ylabel(instances{row},'interpreter','none','fontweight','bold')
+        end
+        if ~((col==np && row<np) || (col==1 && row==np))
+            set(gca,'yticklabels',{})
+        end
     end
     
     %extract samples, while accounting for parameters vs. parameter instances
@@ -198,9 +228,9 @@ for n = 1:(np*np)
         yl = [min(chains_yr) max(chains_yr)];
     end
     
-    %if on diagonal, univariate marginal posterior density ...
+    %if on diagonal, univariate marginal posterior density (or names) ...
     if onDiagonal
-        %smoothed density
+        %underlay smoothed density
         isDiscrete = all(~mod(chains_xc,1));
         [f,x] = smoothdensity(chains_xc);
         if isDiscrete
@@ -214,6 +244,15 @@ for n = 1:(np*np)
         end
         xlim(xl)
         set(gca,'ytick',[])
+        %overlay parameter instance name
+        if namesOnDiag
+            %... and names
+            %(if name is long, will extend beyond plot!)
+            text(mean(xlim),mean(ylim),instances{row}, ...
+                'interpreter','none', ...
+                'fontsize',fontSz,'fontweight','bold', ...
+                'horizontalalignment','center','verticalalignment','middle')
+        end
     end
     
     %set colormap for contour plots
@@ -222,8 +261,12 @@ for n = 1:(np*np)
     %if off diagonal, bivariate marginal posterior density ...
     if offDiagonal
         %contour plot
-        if contourForSpeed
-            %bivariate histogram
+        switch biplotType
+          case 'ksdensity'
+            %%% bivariate smoothed density estimate %%%
+            ksdensity(gca,[chains_xc,chains_yr],'PlotFcn','contour')
+          case 'contour'
+            %%% bivariate histogram %%%
             [Fgrid,Xedges,Yedges] = histcounts2(chains_xc,chains_yr, ...
                 'normalization','pdf'); %(actually scaling is optional)
             Fgrid = Fgrid';
@@ -233,14 +276,16 @@ for n = 1:(np*np)
             %... meshgrid
             [Xgrid,Ygrid] = meshgrid(Xmids,Ymids);
             maxF = max(Fgrid(:));
+            minF = mink(unique(Fgrid(:)),2);
+            if minF(1)>0, minF = minF(1); else minF = minF(2); end
             %contour plot where the outermost line/fill includes ALL samples
             %VERSION 1: outline
-            % levels = [-1 linspace(eps,maxF+eps,nLevels)];
-            levels = linspace(eps,maxF,nLevels); %eps => exclude Fgrid bins with 0 samples
-%             contour(Xgrid,Ygrid,Fgrid,'levellist',levels,'linecolor','k')
+            % levels = linspace(eps,maxF,nLevels+1); %eps => exclude Fgrid bins with 0 samples
+            levels = linspace(minF,maxF,nLevels+1); %exclude Fgrid bins with 0 samples
             contourf(Xgrid,Ygrid,Fgrid, ...
-                'levellist',levels,'fill','on')%,'linecolor','flat')
-        else
+                'levellist',levels,'fill','on','linecolor','flat') %%%filled
+            % contour(Xgrid,Ygrid,Fgrid,'levellist',levels,'linecolor','k') %%%just outlines
+          case 'scatter'
             %scatter plot
             %(MUCH SLOWER AND HUUUUGE MEMORY DRAIN!!!)
             scatter(chains_xc,chains_yr, ...
@@ -252,16 +297,18 @@ for n = 1:(np*np)
         %overlay divergent transitions
         if overlayDivergent
             plot(chains_xc(divergent==1),chains_yr(divergent==1), ...
-                'linestyle','none','linewidth',linePt, ...
-                'marker','x','markersize',round(markSz/2), ...
-                'markerfacecolor',divergentColor,'markeredgecolor',divergentColor)
+                'linestyle','none','linewidth',linePt*0.5, ...
+                'markerfacecolor','none','markeredgecolor',divergentColor, ...
+                'marker','.','markersize',markSz*0.8)
+%                 'marker','o','markersize',markSz*0.35)
+%                 'marker','x','markersize',markSz*0.5)
         end
         xlim(xl)
         ylim(yl)
     end
     
     %add a colorbar (one plot only!)
-    if row==1 && col==np
+    if row==np && col==np
         %add a colorbar
         cb = colorbar;
         cb.Ticks = [];

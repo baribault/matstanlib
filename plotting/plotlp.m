@@ -14,7 +14,7 @@ function plotlp(diagnostics,rtable)
 % 
 % (c) beth baribault 2019 ---                                 > matstanlib 
 
-matstanlib_options
+msl.options
 
 %% parse required inputs
 if ~isstruct(diagnostics) || ~isfield(diagnostics,'divergent__')

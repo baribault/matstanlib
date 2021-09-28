@@ -28,7 +28,7 @@ function parcoordivergent(samples,diagnostics,parameterRequest)
 % 
 % (c) beth baribault 2019 ---                                 > matstanlib 
 
-matstanlib_options
+msl.options
 
 %% parse inputs
 if ~isstruct(samples)
@@ -111,7 +111,7 @@ end
 %format plot
 set(gca,'xlim',[0.9 nParameters+0.1], ...
     'xtick',1:nParameters,'xticklabel',parameters, ...
-    'xticklabelrotation',30,'ticklabelinterpreter','none')
+    'ticklabelinterpreter','none')
 set(gca,'ygrid','on','box','on','fontsize',fontSz)
 
 end

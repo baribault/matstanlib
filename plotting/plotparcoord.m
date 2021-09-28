@@ -30,7 +30,7 @@ function plotparcoord(samples,diagnostics,parameterRequest)
 % 
 % (c) beth baribault 2019 ---                                 > matstanlib 
 
-matstanlib_options
+msl.options
 
 %% parse inputs
 %samples

@@ -2,11 +2,12 @@ function rankplots(samples,varargin)
 %RANKPLOTS displays and a marginal density for each parameter.
 % 
 % this function will generate a single figure with one subplot per chain,
-% where is subplot is a histogram of that chain's posterior samples' rank
-% within the pool of samples across all chains.
+% where each subplot is a histogram of that chain's posterior samples' rank
+% within the pool of samples across all chains.  
 % 
 % if all chains are behaving similarly, the rank plot for each and every
-% chain should appear uniform. 
+% chain should appear uniform.  the faded black line represents a perfectly
+% uniform distribution.  
 % 
 % this new diagnostic plot was suggested in:
 %             Vehtari, Gelman, Simpson, Carpenter, Bürkner (2020). 
@@ -45,18 +46,44 @@ function rankplots(samples,varargin)
 %   a custom number of bins, NBINS, may be specified.
 % 
 % 
-% See also TRACEDENSITY
+% See also TRACEDENSITY, ESSPLOTS, PLOTMCSE
 % 
 % (c) beth baribault 2019 ---                                 > matstanlib 
 
-matstanlib_options
+msl.options
 
 %% parse inputs
 %samples
-if ~isstruct(samples)
+if isstruct(samples)
+    %gave samples
+elseif isnumeric(samples) && ismatrix(samples)
+    %gave chains
+    chainParam = '';
+    if ~isempty(varargin)
+        isParamStr = ...
+            cellfun(@(x) ischar(x) && ~strcmp(x,'ranknorm'),varargin);
+        if any(isParamStr)
+            chainParamInd = find(isParamStr,1);
+            if ~isempty(varargin{chainParamInd})
+                chainParam = varargin{chainParamInd};
+            end
+            varargin(isParamStr) = []; %pop out of varargin
+        end
+    end
+    if isempty(chainParam), chainParam = 'NO_TITLE'; end
+    %convert to struct
+    tmp_samples.(chainParam) = samples;
+    clearvars samples
+    samples = tmp_samples;
+else
     error(['first input must be a structure of posterior samples ' ...
         '(consisitent with the output of extractsamples.m).'])
 end
+% % % %samples
+% % % if ~isstruct(samples)
+% % %     error(['first input must be a structure of posterior samples ' ...
+% % %         '(consisitent with the output of extractsamples.m).'])
+% % % end
 
 %nBins
 if isempty(varargin) || ~any(cellfun(@isnumeric,varargin))
@@ -102,7 +129,6 @@ end
 
 %% prepare to generate plots
 chainColors = getcolors('mcmc');
-barColor = getcolors('lightgray');
 
 %maximum number of figures to generate
 maxNfigures = 25;
@@ -134,55 +160,77 @@ for p = 1:min([length(parameters),maxNfigures])
     end
     
     %extract info
-    [nIterations,nChains] = size(chains,[1 2]);
-    nSamples = nIterations*nChains;
+    if p==1
+        [nIterations,nChains] = size(chains,[1 2]);
+        nSamples = nIterations*nChains;
+        %if not given, determine number of bins to use in histogram
+        if isempty(nBins)
+            if nSamples <= 500
+                nBins = 10; %minimum of 10 bins
+            elseif nSamples <= 2000
+                nBins = 20; %use 20 bins if between 501 and 2000 samples
+            elseif nSamples <= 8000
+                nBins = 40; %use 40 bins if between 2001 and 8000 samples
+            else
+                nBins = 50; %use 50 bins if more than 8000 samples
+            end
+        end
+    end
     
     %rank (relative to **all** samples)
-    sz = size(chains);  %extract size
-    chains = tiedrank(chains(:));    %rank
-    chains = reshape(chains,sz);  %convert from back to matrix
+    sz = size(chains);              %extract size
+    chains = tiedrank(chains(:));   %rank
+    chains = reshape(chains,sz);    %convert from back to matrix
     
     %start a figure ...
     dumf = figure(999); %dummy figure to protect sizing
     f = figure('color',[1 1 1]);
     fpos = f.Position;
+    f.Position = [fpos(1:2) [520 420]*figScaling];
     close(dumf.Number); %close dummy figure
     %... and a layout
-    t = tiledlayout('flow','tilespacing','compact');
+    t = tiledlayout('flow','tilespacing','compact','padding','compact');
     t.Title.String = parameters{p};
     set(t.Title,'fontweight','bold','interpreter','none','fontsize',fontSz*1.1)
     
     %%% rank plot (one per chain) %%%
+    ax = gobjects([nChains 1]);
     for m = 1:nChains
-        ax = nexttile; hold on;
-        if m==1
-            if ~isempty(nBins)
-                binOpts = {nBins}; %(use input)
-            elseif nSamples < 500
-                binOpts = {10}; %minimum of 10 bins
-            elseif nSamples < 1250
-                binOpts = {20}; %use 20 bins if between 500 and 1249 samples
-            elseif nSamples < 2500
-                binOpts = {35}; %use 35 bins if between 1250 and 2499 samples
-            else
-                binOpts = {50}; %use 50 bins if at least 2500 samples
-            end
-        end
+        ax(m) = nexttile; hold on;
+        %underlay line to represent uniformly distributed ranks
+        unifLineOpts = {'color','k','linewidth',linePt};
+        hl0 = plot([-0.1*nSamples -0.025*nSamples],[1 1]*nIterations/nBins, ...
+            unifLineOpts{:},'linestyle',':');
+        hl = plot([-0.025*nSamples 1.025*nSamples],[1 1]*nIterations/nBins, ...
+            unifLineOpts{:},'linestyle','-');
+        hl1 = plot([1.025*nSamples 1.1*nSamples],[1 1]*nIterations/nBins, ...
+            unifLineOpts{:},'linestyle',':');
+        hl0.Color = [hl0.Color 0.5];
+        hl.Color = [hl.Color 0.5];
+        hl1.Color = [hl1.Color 0.5];
+        %rank plot
+        binOpts = {nBins};
         histogram(chains(:,m),binOpts{:}, ...
-            'facecolor',chainColors(m,:),'edgecolor','k')
+            'facecolor',chainColors(m,:),'edgecolor','k', ...
+            'facealpha',1)
         %format
-        xlim([-0.1*nSamples 1.1*nSamples]); xt = get(gca,'xtick'); 
-        xt(xt<0) = []; xt(xt>nSamples) = []; set(gca,'xtick',xt)
-        ax.YAxis.Visible = 'off'; %y-axis is uninformative
+        xlim([-0.1*nSamples 1.1*nSamples]); 
+        if m==1
+            xt = get(gca,'xtick');
+            xt(xt<0) = []; xt(xt>nSamples) = [];
+        end    
+        set(gca,'xtick',xt)          %x-axis ticks are same for all
+        ax(m).YAxis.Visible = 'off'; %y-axis is uninformative
         % xlabel('rank')
         % xlabel(sprintf('chain %i',m))
         title(sprintf('chain %i',m),'fontweight','normal')
         set(gca,'fontsize',fontSz)
     end
+    linkaxes(ax,'x') %zooming one zooms all
     
     %resize the figure based on the number of tiles
     gridSize = t.GridSize;
     f.Position = [fpos(1:2) (gridSize.*[300 150] + [0 75])*figScaling];
-end    
+end
 
 end

@@ -70,6 +70,10 @@ function violindensity(samples,parameterRequest,varargin)
 %       instances. if FILLCOLOR is Nx3 then each row is used for each
 %       successive parameter instance.
 %   
+%   'fillalpha'
+%       override the default fill opacity (1) with a custom opacity
+%       value, FILLALPHA.  FILLALPHA must be between 0 and 1.
+%   
 %   'outlinecolor'
 %       optionally, override the default outline color scheme (all black)
 %       with the color(s) given in MARKERCOLOR.  
@@ -79,6 +83,13 @@ function violindensity(samples,parameterRequest,varargin)
 %       optionally, override the default median marker color scheme (all
 %       white) with the color(s) given in MARKERCOLOR.  
 %       the size and usage demands are the same as for FILLCOLOR.
+%   
+%   'truecolor'
+%       optionally, override the default true value marker color scheme
+%       (all black) with the color(s) given in TRUECOLOR.  
+%       the size and usage demands are the same as for FILLCOLOR. 
+%       this property is only permissible if a 'truevalues' property-value
+%       pair is also given. 
 %   
 %   'grid'
 %       GRID indicates whether to include a soft vertical line across the
@@ -101,7 +112,7 @@ function violindensity(samples,parameterRequest,varargin)
 % 
 % (c) beth baribault 2021 ---                                 > matstanlib 
 
-matstanlib_options
+msl.options
 
 %% parse required inputs
 if nargin < 2
@@ -110,7 +121,7 @@ end
 
 %samples
 if ~isstruct(samples)
-    error('the first input must be a structure of mcmc samples.')
+    error('the first input must be a structure of posterior samples.')
 end
 
 %parameterRequest
@@ -143,6 +154,7 @@ addInterval = true;
 trueValues = NaN;               addTrueValues = false;
 criticalValue = NaN;
 fillColor = NaN;    %use default colors
+fillAlpha = 1;
 outlineColor = NaN; %use default colors
 markerColor = NaN;  %use default colors
 trueColor = NaN;    %use default colors
@@ -215,6 +227,18 @@ for v = 1:2:length(varargin)
                 end
             else
                 error('fillcolor must be numeric.')
+            end
+        %----------------------------------------------------------------%
+        case 'fillalpha'
+            fillAlpha = varargin{v+1};
+            if ~isnumeric(fillAlpha)
+                error('fillAlpha must be a numeric value.')
+            elseif isempty(fillAlpha)
+                %use default
+            elseif ~isvector(fillAlpha)
+                error('fillAlpha must be scalar or vector.')
+            elseif any(fillAlpha(:) < 0 | fillAlpha(:) > 1)
+                error('fillAlpha must be between 0 and 1.')
             end
         %----------------------------------------------------------------%
         case 'outlinecolor'
@@ -328,6 +352,14 @@ else
         error('fillcolor has invalid number of rows.')
     end
 end
+% ... fill alpha
+if isscalar(fillAlpha)
+    fillAlphas = repmat(fillAlpha,[nParameters 1]);
+elseif isequal(length(fillAlpha),nParameters)
+    fillAlphas = fillAlpha;
+else
+    error('the length of fillAlpha does not match the number of parameters.')
+end
 % ... outline
 if any(isnan(outlineColor(:))) || isempty(outlineColor)
     outlineColors = repmat(defaultOutlineColor,[nParameters 1]);
@@ -437,7 +469,7 @@ scaleF = 0.95;      % ... the density (at maximum width)?
 %underlay a line at the critical value
 if ~isnan(criticalValue)
     line([-2 nParameters+2],criticalValue*[1 1], ...
-        'color',0.25*[1 1 1],'linestyle','-')
+        'color',0.25*[1 1 1],'linestyle',':')
 end
 
 if scaleF > 1, error('scaleF must be less than 1.'); end
@@ -467,7 +499,7 @@ for n = 1:nParameters
             %(duping start and end values in fill to ensure that the shape is 
             %closed if up even if most values are against an end boundary)
             fill([n n+side*fs n],[xs(1)-eps xs xs(end)+eps],fillColors(n,:), ...
-                'edgecolor','none')
+                'facealpha',fillAlphas(n),'edgecolor','none')
         end
     end
     %outline the violin

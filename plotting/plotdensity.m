@@ -48,7 +48,7 @@ function plotdensity(varargin)
 % 
 % (c) beth baribault 2019 ---                                 > matstanlib 
 
-matstanlib_options
+msl.options
 
 %% parse required inputs
 if nargin == 0
@@ -109,7 +109,8 @@ end
 %% parse optional inputs
 validOptions = {'mean','median','mode','argmax','max', ...
                 'credible','credible95','credible90','credible50', ...
-                'hdi','legend'};
+                'hdi','hpd','hpdi', ...
+                'legend'};
 if nargin == numRequiredInputs
     options = {};
 elseif nargin > numRequiredInputs
@@ -127,8 +128,9 @@ elseif nargin > numRequiredInputs
             error('invalid optional input type(s) detected.')
         end
     end
+    %case-insensitive
+    options = lower(options);
     %if all char-array type, check if all are pre-defined options
-    options = lower(options); %case insensitive
     isInvalidOption = ~ismember(options,validOptions);
     if any(isInvalidOption)
         error('invalid optional input string(s) detected: ''%s''', ...
@@ -138,9 +140,13 @@ elseif nargin > numRequiredInputs
         error('''legend'' cannot be the only optional input.')
     end
 end
-if any(ismember({'hdi','HDI'},options)) && ...
-        ~any(ismember({'credible','credible95','credible90','credible50'},options))
-    options{end+1} = 'credible';
+
+CItype = 'central'; %default
+if any(ismember({'hdi','hpd','hpdi'},options))
+    CItype = 'hdi';
+    if ~any(ismember({'credible','credible95','credible90','credible50'},options))
+        options{end+1} = 'credible';
+    end
 end
 
 %% plot smoothed density & overlays
@@ -171,42 +177,24 @@ isDiscrete = all(~mod(chains,1));
 [f,x] = smoothdensity(chains);
 
 %plot optional underlays
-getbounds = @(p) [(1-p)/2   1-(1-p)/2];
+switch CItype
+    case 'central', CIstr = 'credible interval';
+    case 'hdi',     CIstr = 'highest density interval';
+end
 if any(ismember({'credible','credible95'},options))
-    if any(ismember({'hdi','HDI'},options))
-        hdi = computecredint(chains,0.95,'hdi');
-        [h,labels] = shadeinterval('95% highest density interval',hdi, ...
-            x,f,0.9*[1 1 1],h,labels);
-    else
-        bounds = getbounds(0.95);
-        [h,labels] = shadeinterval('95% credible interval', ...
-            [quantile(chains,bounds(1)) quantile(chains,bounds(2))], ...
-            x,f,0.9*[1 1 1],h,labels);
-    end
+    CI = computecredint(chains,0.95,CItype);
+    [h,labels] = shadeinterval(sprintf('95%% %s',CIstr),CI, ...
+        x,f,0.95*[1 1 1],h,labels);
 end
 if ismember('credible90',options)
-    if any(ismember({'hdi','HDI'},options))
-        hdi = computecredint(chains,0.90,'hdi');
-        [h,labels] = shadeinterval('90% highest density interval',hdi, ...
-            x,f,0.775*[1 1 1],h,labels);
-    else
-        bounds = getbounds(0.90);
-        [h,labels] = shadeinterval('90% credible interval', ...
-            [quantile(chains,bounds(1)) quantile(chains,bounds(2))], ...
-            x,f,0.775*[1 1 1],h,labels);
-    end
+    CI = computecredint(chains,0.90,CItype);
+    [h,labels] = shadeinterval(sprintf('90%% %s',CIstr),CI, ...
+        x,f,0.85*[1 1 1],h,labels);
 end
 if ismember('credible50',options)
-    if any(ismember({'hdi','HDI'},options))
-        hdi = computecredint(chains,0.50,'hdi');
-        [h,labels] = shadeinterval('50% highest density interval',hdi, ...
-            x,f,0.575*[1 1 1],h,labels);
-    else
-        bounds = getbounds(0.50);
-        [h,labels] = shadeinterval('50% credible interval', ...
-            [quantile(chains,bounds(1)) quantile(chains,bounds(2))], ...
-            x,f,0.575*[1 1 1],h,labels);
-    end
+    CI = computecredint(chains,0.50,CItype);
+    [h,labels] = shadeinterval(sprintf('50%% %s',CIstr),CI, ...
+        x,f,0.75*[1 1 1],h,labels);
 end
 
 %plot density
@@ -227,7 +215,7 @@ set(ax,'box','on','fontsize',fontSz)
 
 %plot optional overlays
 ylim = ax.YLim;
-if any(ismember({'max','argmax'},options))
+if any(ismember({'argmax','max'},options))
     [h,labels] = verticalline('max',x(f==max(f)),ylim,linePt, ...
         getcolors('darkgreen'),h,labels);
 end
@@ -264,7 +252,7 @@ function [h,labels] = verticalline(name,xvalue,yvalues,linePt,color,h,labels,das
     if nargin < 8
         dash = '-'; %default is solid line
     end
-    h(end+1) = plot(xvalue*[1 1],yvalues,'linewidth',linePt*2,'color',color, ...
+    h(end+1) = plot(xvalue*[1 1],yvalues,'linewidth',linePt,'color',color, ...
         'linestyle',dash);
     labels{end+1} = name;
 end
