@@ -1,31 +1,31 @@
 
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-%%%%%%%%%%%%%%%%%%%%%%%%%%      EXAMPLE_RL       %%%%%%%%%%%%%%%%%%%%%%%%%%
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-% this script implements a hierarchical cogntive model --- specifically a 
-% simple reinforcement learning model of data from an N-armed bandit task.  
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% this script demonstates how a hierarchical cognitive model may be
+% implemented in Stan.  
 % 
-% first, data from this experimental design is simulated for multiple 
-% participants using true parameter values (randomly drawn from the priors).  
-% then, a Bayesian implementation of Q-learning is specified in Stan code.
+% specifically, it demonstrates implementation of a reinforcement learning
+% (RL) model of data from an N-armed bandit task. first, data from this
+% experimental design is simulated for multiple participants.  then, a
+% Bayesian implementation of Q-learning is specified as a Stan model.
 % finally, the model is run and parameter recovery is demonstrated. 
 % 
 % this example is designed to illustrate the following ideas & principles:
 %   - implementation of a hierarchical cognitive model
 %   - computational tricks for beta and gamma priors & their associated
 %       hyperpriors
-%   - ...
+%   - 
 % 
 % 
 % to run this script, the following must be installed: 
-%       Stan        >>  https://mc-stan.org/
+%       Stan        >>  https://mc-stan.org/users/interfaces/cmdstan.html
 %       MATLABStan  >>  https://github.com/brian-lau/MatlabStan
-%       matstanlib  >>  https://github.com/baribault/matstanlib
-% 
-% Reference:    ... 
+%       matstanlib  >>  https://github.com/baribault/matstanlib 
+%
 % 
 % (c) beth baribault 2021 ---                                 > matstanlib
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
 close all
 clear
@@ -35,30 +35,31 @@ clc
 
 modelName = 'example_RL';
 
-%experimental design
-%what is the actual probability of reward for each bandit arm?
-%   (specify this as a vector of reward probabilites where the 
-%    number of elements == number of arms, and the elements sum to 1)
-% RewardProb = [1 0 0]; %deterministic, 3-armed bandit
-RewardProb = [0.8 0.2]; %probabilistic, 2-armed bandit
+%experiment settings
+%   what is the actual probability of reward per arm?
+%       (length of vector == number of arms)
+%       (elements must sum to 1)
+% RewardProb = [1 0];     %deterministic
+RewardProb = [0.8 0.2]; %probabilistic
 
 %which model specification, 'gamma' priors or truncated 'normal' priors?
-priors = 'normal';
+priors = 'fixed-gamma';
 
 %sampler settings
 nChains     = 4;        %how many chains?
 nWarmup     = 250;      %how many iterations during warmup?
 nIterations = 1000;     %how many iterations after warmup?
 
-%an absolute path to a (temporary) location for Stan output files:
+%an absolute path to a location for (temporary) Stan output files
+% workingDir = '/my/custom/dir/';
 workingDir = [pwd filesep 'wdir_' modelName];
 
-%delete temporary files after Stan finishes and output has been returned?
-%(this helps prevent compilation conflicts, etc.)
+%delete all temp files after stan finishes and selected output is saved?
 cleanUp = true;
 
-%% setup
-fprintf('\n\n************\n\npreparing to run the %s model.\n',modelName)
+%% prepare for output
+fprintf('\n\n**********\n\npreparing to run the %s model.\n', ...
+    upper(modelName))
 
 %working directory
 if ~isequal(workingDir(end),filesep), workingDir(end+1) = filesep; end
@@ -71,19 +72,12 @@ if ~exist(workingDir,'dir')
     fprintf('done.\n')
 end
 
-%double check RewardProb
-if ~isnumeric(RewardProb) || ~isvector(RewardProb) || length(RewardProb) < 2
-    error('RewardProb be a numeric vector with at least two elements.')
-elseif ~isequal(sum(RewardProb),1)
-    error('RewardProb must sum to 1.')
-end
-
 %% data
-disp('\nsimulating data ... ')
+disp('simulating data ... ')
 
 %%% known features of the experiment
 nSubjects = 20;     %number of subjects
-nProblems = 2;      %number of bandit problems per subject
+nProblems = 4;      %number of bandit problems per subject
 nTrials   = 20;     %number of trials per bandit problem
 nData = nSubjects*nProblems*nTrials; %total number of data points
 
@@ -91,26 +85,46 @@ nArms = length(RewardProb); %number of arms in bandit problem
 bestArm = find(RewardProb == max(RewardProb)); %highest probability arm
 
 %%% fixed parameters
-Q0 = ones([nArms 1])/nArms;
+Q0 = ones([nArms 1])/nArms; %[1/2 1/2], [1/3 1/3 1/3], etc.
 epsilon = 0.001;
 
-%%% true parameter values
-% %... participant level
-% beta = gamrnd(shape,scale,[nSubjects 1]);
-% alpha = betarnd(a,b,[nSubjects 1]);
 
-% beta = linspace(1,20,nSubjects);
-% alpha = ones([1 nSubjects])*0.25;
+%%% true parameter values: group level
+%beta
+shape = 8;
+scale = 1;  %MATLAB parameterization
+%alpha
+a = 1.5;      
+b = 10;
 
-%%% true parameter values
-N1 = floor(nSubjects/2);
-N2 = nSubjects - N1;
+%derive means & sds
+a_1 = 1 + a;
+b_1 = 1 + b;
+mu_alpha = a_1/(a_1 + b_1);
+sigma_alpha = sqrt(a_1*b_1 / ((a_1 + b_1)^2 * (a_1+b_1+1)) );
 
-%... participant level
-% beta  = [rand([1 N1])*5 + 5         linspace(5,10,N2)         ];
-% alpha = [linspace(0.05,0.25,N1)     rand([1 N2])*0.20 + 0.05];
-beta  = [rand([1 N1])*4 + 4         linspace(4,8,N2)         ];
-alpha = [linspace(0.025,0.175,N1)     rand([1 N2])*0.150 + 0.025];
+shape_1 = 1 + shape;
+rate = 1./scale; %MATLAB parameterization > Stan parameterization
+mu_beta = shape_1/rate;
+sigma_beta = sqrt(shape_1/rate^2);
+
+%%% true parameter values: participant level
+beta = abs(normrnd(mu_beta,sigma_beta,[nSubjects 1]));
+alpha = betarnd(a_1,b_1,[nSubjects 1]);
+
+%create a structure of true values
+trueValues = collecttruevalues(beta,alpha, ...
+                                shape,rate,mu_beta,sigma_beta, ...
+                                a,b,     mu_alpha,sigma_alpha);
+disp(trueValues)
+
+
+figure('color','w')
+tiledlayout('flow')
+nexttile; histogram(alpha,nSubjects); xlim([0 1]); title('alpha')
+nexttile; histogram(beta,nSubjects); title('beta')
+
+
 
 %%% simulate observations
 %data IDs
@@ -125,7 +139,7 @@ Correct = NaN([nData 1]);
 %introduce softmax as an anonymous function 
 softmax = @(x) exp(x)/sum(exp(x));
 
-n = 0; %initialize data point counter
+n = 0; %(initialize data point counter)
 for s = 1:nSubjects
   for p = 1:nProblems
     for t = 1:nTrials
@@ -155,17 +169,17 @@ end
 %%%%%
 % whos nSubjects nTrials nData Subject Trial Action Reward
 % disp([Subject,Trial,Action,Reward])
-
-%create a structure of true values for observing parameter recovery
-trueValues = collecttruevalues(beta,alpha);
-disp(trueValues)
+% % % % % 
+% % % % % %create a structure of true values for observing parameter recovery
+% % % % % trueValues = collecttruevalues(beta,alpha);
+% % % % % disp(trueValues)
 
 %collect data for Stan
 data = struct('S',nSubjects,'T',nTrials','N',nData,'A',nArms, ...
     'Subject',Subject,'Trial',Trial,'Action',Action,'Reward',Reward, ...
     'Q0',Q0);
 
-disp('done!\n')
+disp('done!')
 
 %% plot data
 msl.options %load plotting options
@@ -397,6 +411,41 @@ switch priors
             '    alpha[s] ~ normal(mu_alpha,sigma_alpha);'
             '  }'
             }];
+        
+    %----------------------------------------------------------------%
+    case 'test'
+        %using truncated normal priors for alpha & beta, 
+        %and uniform priors for the hyperparameters
+        modelCode = [modelCode; {
+            'parameters { '
+            '  //group-level parameters'
+            '  real<lower=0> mu_beta;'
+            '  real<lower=0> sigma_beta;'
+            '  real<lower=0,upper=1> mu_alpha;'
+            '  real<lower=0,upper=0.5> sigma_alpha;'
+            '  '
+            '  //subject-level parameters'
+            '  real<lower=0> beta[S];               //inverse temperature'
+            '  real<lower=0,upper=1> alpha[S];      //learning rate'
+            '}'
+            'model { '
+            '  //local variables'
+            '  vector[A] Q;'
+            '  vector[A] pi;'
+            '  real delta;'
+            '  '
+            '  //group-level priors'
+            '  mu_beta ~ uniform(0,40);'
+            '  sigma_beta ~ uniform(0,10);'
+            '  mu_alpha ~ uniform(0,1);'
+            '  sigma_alpha ~ uniform(0,0.5);'
+            '  '
+            '  //individual-level priors'
+            '  for (s in 1:S) { '
+            '    beta[s] ~ normal(mu_beta,sigma_beta);'
+            '    alpha[s] ~ normal(mu_alpha,sigma_alpha);'
+            '  }'
+            }];
 end
 
 %final bit of the model code
@@ -421,6 +470,7 @@ modelCode = [modelCode; {
     '}'
     }];
 
+
 %write the model code to a .stan file
 stanFilePath = writestanfile(modelCode,modelName,workingDir);
 
@@ -434,41 +484,45 @@ fprintf('compiling took %.2f seconds.\n',toc)
 
 %% run the model
 tic
-fprintf('\nrunning the model ... \n\n************\n\n')
+fprintf('\nrunning the model ... \n\n**********\n\n')
 fit =  sm.sampling('file',  stanFilePath, ...
-                   'model_name',   modelName, ...
-                   'sample_file',  modelName, ...
-                   'verbose',      true, ...
-                   'chains',       nChains, ...
-                   'warmup',       nWarmup, ...
-                   'iter',         nIterations, ...
-                   'working_dir',  workingDir);
+            'model_name',   modelName, ...
+            'sample_file',  modelName, ...
+            'data',         data, ...
+            'chains',       nChains, ...
+            'warmup',       nWarmup, ...
+            'iter',         nIterations, ...
+            'verbose',      true, ...
+            'working_dir',  workingDir);
 fit.block();
 [stanSummaryTxt,stanSummary] = fit.print('sig_figs',5);
-fprintf('\n************\n\ndone!\n')
+fprintf('\n**********\n\ndone!\n')
 fprintf('\nsampling took %.2f seconds.\n',toc)
 
 %% extract from the StanFit object
 [samples,diagnostics] = extractsamples('MATLABStan',fit);
-
-%extract parameter names
-parameters = fieldnames(samples);
-instances = getparaminstances([],samples);
-hyperparameters = setdiff(parameters,{'alpha','beta'});
 
 %clean up after MATLABStan
 clearvars fit
 %clean up after Stan
 if cleanUp, delete([workingDir '*']); rmdir(workingDir); end
 
-%% diagnostic reports & plots
-%compute posterior sample-based diagnostics and summary statistics
+%% diagnostic report & plots
+%calculate convergence diagnostics based on the posterior samples
 posteriorTable = mcmctable(samples);
-%print a report about all MCMC diagnostics
+%print a report about posterior sample-based diagnostics
 interpretdiagnostics(diagnostics,posteriorTable)
 
-% %trace plots/rank plots
-% tracedensity(samples,hyperparameters,diagnostics)
+%extract parameter names
+parameters = fieldnames(samples);
+instances = getparaminstances([],samples);
+hyperparameters = setdiff(parameters,{'alpha','beta'});
+
+alphaParameters = {'alpha','a','b','mu_alpha','sigma_alpha'};
+betaParameters = {'beta','shape','rate','mu_beta','sigma_beta'};
+
+% %generate diagnostic plots
+% % tracedensity(samples,hyperparameters,diagnostics)
 % rankplots(samples,hyperparameters)
 % 
 % multidensity(samples,hyperparameters,diagnostics)
@@ -487,31 +541,38 @@ interpretdiagnostics(diagnostics,posteriorTable)
 estimatedValues = getsamplestats(samples,trueValues);
 
 %plot recovery
-recoveryCounts = [0 0];
-recoveryCounts = recoveryCounts + plotrecovery(estimatedValues,trueValues,'alpha');
-recoveryCounts = recoveryCounts + plotrecovery(estimatedValues,trueValues,'beta');
+addBars = true;
+recoveryOpts = {'addinterval',addBars};
+plotrecovery(estimatedValues,trueValues,{'alpha','mu_alpha','sigma_alpha'},recoveryOpts{:})
+plotrecovery(estimatedValues,trueValues,{'beta','mu_beta','sigma_beta'},recoveryOpts{:})
+plotrecovery(estimatedValues,trueValues,{'a','b','shape','rate'},recoveryOpts{:})
 %report recovery
+recoveryCounts = plotrecovery(estimatedValues,trueValues,{'a','b','shape','rate'});
+close %we just want the output, not the figure!
 proportionRecovered = recoveryCounts(1)/sum(recoveryCounts);
 fprintf('\n%i of %i parameters (%.2f%%) were sucessfully recovered!\n', ...
     recoveryCounts(1),sum(recoveryCounts),proportionRecovered*100)
 
-multidensity(samples,hyperparameters,diagnostics)
+%
+multidensity(samples,{'*_alpha','*_beta'},diagnostics)
+
+disp(priors)
 
 %% visualize group-level means
-% % plotdensity(samples,'mu_alpha','credible','mean','legend',mean(trueValues.alpha))
-% % xlim([0 1])
-% % ylabel('')
-% % 
-% % plotdensity(samples,'mu_beta','credible','hdi','median','legend',mean(trueValues.beta))
-% % xlim([0 17])
-% % ylabel('')
+% plotdensity(samples,'mu_alpha','credible','mean','legend',mean(trueValues.alpha))
+% xlim([0 1])
+% ylabel('')
+% 
+% plotdensity(samples,'mu_beta','credible','hdi','median','legend',mean(trueValues.beta))
+% xlim([0 17])
+% ylabel('')
 
 %% visualize individual differences
-% % plotintervals(samples,'alpha', ...
-% %     'truevalues',trueValues,'truecolor',getcolors('red'))
-% % horzdensity(samples,'alpha', ...
-% %     'truevalues',trueValues,'truecolor',getcolors('red'))
-% % plotintervals(samples,'beta', ...
-% % 	'truevalues',trueValues,'truecolor',getcolors('red'))
-% % horzdensity(samples,'beta', ...
-% %     'truevalues',trueValues,'truecolor',getcolors('red'))
+% plotintervals(samples,'alpha', ...
+%     'truevalues',trueValues,'truecolor',getcolors('red'))
+% horzdensity(samples,'alpha', ...
+%     'truevalues',trueValues,'truecolor',getcolors('red'))
+% plotintervals(samples,'beta', ...
+% 	'truevalues',trueValues,'truecolor',getcolors('red'))
+% horzdensity(samples,'beta', ...
+%     'truevalues',trueValues,'truecolor',getcolors('red'))
