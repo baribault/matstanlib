@@ -10,6 +10,9 @@ function z = ranknorm(chains,offset)
 % 
 % (c) beth baribault 2021 ---                                 > matstanlib
 
+import msl.*
+
+%%
 if nargin < 2
     %as per Vehtari et al. (2020), with reference to Blom (1958)
     offset = 3/8;

@@ -22,6 +22,8 @@ function PSRF = splitrhat(chains,alreadySplit)
 % 
 % (c) beth baribault 2019 ---                                 > matstanlib 
 
+import msl.*
+
 %% check inputs
 if nargin < 1, error('a chains matrix is required.'); end
 %chains

@@ -22,6 +22,8 @@ function ESS = ess_core(chains,proportion)
 % 
 % (c) beth baribault 2021 ---                                 > matstanlib 
 
+import msl.*
+
 %% check inputs
 if nargin < 1, error('a chains matrix is required.'); end
 %chains
@@ -71,17 +73,17 @@ overestPostVar = (N-1)/N*withinChainsVar + 1/N*betweenChainsVar;  %var+
 %% 
 acov = NaN([N 4]);
 for m = 1:M
-    [acorr,~] = acf(chains(:,m));
+    [acorr,~] = acf_(chains(:,m));
     acov(:,m) = acorr;
-    acov(:,m) = acorr/acorr(1);
+    acov(:,m) = acorr/acorr(1) * var(chains(:,m),0) * (N-1)/N;
 end
-acov(1,:)
+% acov(1,:)
 
 mean_var = mean(acov(1,:))*N/(N - 1);
-mean_var - mean(chainVariances) %basically the same
+% mean_var - mean(chainVariances) %basically the same
 
 var_plus = mean_var*(N - 1)/N + var(chainMeans);
-var_plus - overestPostVar %basically the same
+% var_plus - overestPostVar %basically the same
 
 % mean_var = mean(chainVariances);
 % var_plus = overestPostVar;
@@ -89,8 +91,8 @@ var_plus - overestPostVar %basically the same
 %% Geyer's initial positive sequence
 rho_hat_t = zeros([N 1]);
 t = 0;
-rho_hat_even = 1 - (mean_var - mean(acov(t+1,:)))/var_plus
-rho_hat_even = 1
+% rho_hat_even = 1 - (mean_var - mean(acov(t+1,:)))/var_plus
+rho_hat_even = 1;
 rho_hat_t(t+1) = rho_hat_even;
 
 rho_hat_odd  = 1 - (mean_var - mean(acov(t+2,:)))/var_plus;
