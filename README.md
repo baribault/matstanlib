@@ -1,7 +1,7 @@
 # matstanlib
 matstanlib is a MATLAB library for diagnostic visualization, processing, and analysis of output from Bayesian models fit with [Stan](https://mc-stan.org/).  
 
-On the diagnostic side, matstanlib offers a full set automated diagnostic checks, consistent with current best practice for Bayesian modeling, as well as a wide variety of diagnostic plots.  
+On the diagnostic side, matstanlib offers a full set of automated diagnostic checks, consistent with current best practice for Bayesian modeling, as well as a wide variety of diagnostic plots.  
 
 On the analysis side, matstanlib offers even more plots to facilitate visual exploration of model results, in addition to analysis functions for parameter estimation and model comparison.  
 
