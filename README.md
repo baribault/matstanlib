@@ -26,13 +26,26 @@ addpath(genpath('/path/to/matstanlib'))
 ```
 To ensure **matstanlib** is always available, add the above line (with a real path, of course) to your `startup.m` file.
 
+## Documentation
+The [**matstanlib** wiki](https://github.com/baribault/matstanlib/wiki) offers guidance on how to use **matstanlib**, gives an overview of all **matstanlib** functions, and more.  (The wiki is currently a work in progress!) 
+
+**matstanlib** is also heavily internally documented.  To see the most recent & complete documentation for a given function, run `help` followed by the name of a function at the MATLAB command line. For example:
+```
+help extractsamples
+```
+```
+help tracedensity
+```
+```
+help computebfmi
+```
 
 ## Getting started
+To see how **matstanlib** functions support a Bayesian workflow in MATLAB, try running one of the scripts in the `example` folder.  The `example_correlation` script is a great place to start! 
+
 If you already have Stan model output in the workspace, start with the functions in the `core` folder:
 1. `extractsamples.m` converts your output to a more standard format that is compatibile with all **matstanlib** functions
 2. `mcmctable.m` uses the posterior samples to compute summary statistics and convergence diagnostics for each parameter
 3. `interpretdiagnostics.m` prints a full diagnostic report and warns when any convergence checks fail
 
-To start from scratch, try running one of the scripts in the `example` folder to see how **matstanlib** functions support a Bayesian workflow in MATLAB.  
-
-You can also check out `skeleton.m` to start writing your own Bayesian modeling scripts with Stan & **matstanlib**.  
+To start writing your own Bayesian modeling scripts with Stan & **matstanlib**, check out `skeleton.m`.  
