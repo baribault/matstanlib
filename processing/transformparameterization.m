@@ -1,8 +1,8 @@
-function samples = hypertransform(samples, ...
+function samples = transformparameterization(samples, ...
     hyperparameters,distribution,outquantity,outparameter,functions)
-%HYPERTRANSFORM takes hyperparameter samples and applies known transforms.
+%TRANSFORMPARAMETERIZATION takes hyperparameter samples and applies a known transform.
 % 
-% SAMPLES = HYPERTRANSFORM(SAMPLES,HYPERPARAMETERS, ...
+% SAMPLES = TRANSFORMPARAMETERIZATION(SAMPLES,HYPERPARAMETERS, ...
 %               DISTRIBUTION,OUTQUANTITY,OUTPARAMETER,FUNCTIONS)
 % 
 % DISTRIBUTION is a string that determines which distribution 
@@ -12,9 +12,9 @@ function samples = hypertransform(samples, ...
 %   if in the Stan code you had:
 %       alpha ~ beta(1 + a_alpha, 1 + b_alpha);       //individual-level
 %       a_alpha ~ gamma(1,1);  b_alpha ~ gamma(1,1);  //group-level
-%   
-%   then you could obtain the group-level mean and standard deviation with:
-%       samples = hypertransform(samples,{'a_alpha','b_alpha'},'beta', ...
+%   the you could obtain the group-level mean and standard deviation with:
+%       samples = transformparameterization( ...
+%           samples,{'a_alpha','b_alpha'},'beta', ...
 %           {'mean','std'},{'mu_alpha','sigma_alpha'},{@(x) x+1,@(x) x+1});
 % 
 % (c) beth baribault 2021 ---                                 > matstanlib 
@@ -46,7 +46,7 @@ end
 if ischar(outquantity)
     outquantity = {outquantity};
 end
-validQuantities = {'mean','median','sd'};
+validQuantities = {'mean','std'};
 if any(~ismember(outquantity,validQuantities))
     error(['at least one quantity was not recognized.  ' ...
         'valid quantity inputs include: %s.'], ...
@@ -130,8 +130,6 @@ end
 
 %% transform
 for n = 1:length(outquantity)
-    transformStr = sprintf('the %s for a %s distribution', ...
-                            outquantity{n},distribution);
     switch distribution
       %gamma distribution, characterized by shape (alpha) and rate (beta)
       case 'gamma'
@@ -143,22 +141,20 @@ for n = 1:length(outquantity)
           case 'mean'
             out = alpha./beta;
           case 'median'
-            error('cannot compute %s as there is no simple closed form.', ...
-                transformStr)
-          case 'argmax'
+            error('no simple closed form for a gamma distribution median.')
+          case 'mode'
             if all(alpha(:) >= 1)
                 out = (alpha - 1)./beta;
             else
-                error(['cannot compute the argmax for a gamma distribution ' ...
-                    'for samples where the value of ''%s'' is < 1. ' ...
-                    'in this case, the argmax is only defined when ' ...
-                    'the shape parameter is >= 1.'],hyperparameters{1})
+                error(['the mode of a gamma distribution is only defined ' ...
+                    'for shape parameter (alpha) values >= 1.'])
             end
-          case 'sd'
+          case 'std'
             out = sqrt(alpha)./beta;
           otherwise
-            error(['the %s for a %s distribution is not currently defined ' ...
-                'within this function.'],outquantity{n},distribution)
+            error(['the quanitity ''%s'' for a %s distribution ' ...
+                'is not currently defined within this function.'], ...
+                outquantity{n},ditribution)
         end
 
       %beta distribution, characterized by shape (a) and shape (b)
@@ -171,39 +167,35 @@ for n = 1:length(outquantity)
           case 'mean'
             out = A./(A + B);
           case 'median'
-            if all(A(:) > 1) && all(B(:) > 1)
+            if all(A(:) >= 1) && all(B(:) >= 1)
                 out = (A - 1/3)./(A + B - 2/3); %approximate
+            elseif all(A(:) == 1) && all(B(:) == 1)
+                error(['the mode of a gamma distribution is defined ' ...
+                    'as any value in the interval (0,1) if both shape ' ...
+                    'parameters (A, B) are equal to 1.'])
             else
-                error(['cannot compute the median for a beta distribution ' ...
-                    'for samples where both ''%s'' and ''%s'' are <= 1. ' ...
-                    'in this case, the median requires a solution that ' ...
-                    'is not yet coded in this function.'], ...
-                    hyperparameters{1},hyperparameters{2})
+                error(['the mode of a gamma distribution is bimodal ' ...
+                    '(specifically, is both 0 *and* 1) if both shape ' ...
+                    'parameters (A, B) are < 1.'])
             end
-          case 'argmax'
-            if any(A(:)==1 & B(:)==1)
-                error(['cannot compute the argmax for a beta distribution ' ...
-                    'for samples where both ''%s'' and ''%s'' are equal ' ...
-                    'to 1. in this case, the argmax is defined as any ' ...
-                    'value in the interval (0,1).'], ...
-                    hyperparameters{1},hyperparameters{2})
-            elseif any(A(:)<1 & B(:)<1)
-                error(['cannot compute the argmax for a beta distribution ' ...
-                    'for samples where both ''%s'' and ''%s'' are < 1. ' ...
-                    'in this case, the beta distribution is ' ...
-                    'bimodal and a unique argmax is not available.'], ...
-                    hyperparameters{1},hyperparameters{2})
+          case 'mode'
+            if all(A(:) >= 1) && all(B(:) >= 1)
+                out = (A - 1)./(A + B - 2);
+            elseif all(A(:) == 1) && all(B(:) == 1)
+                error(['the mode of a gamma distribution is defined ' ...
+                    'as any value in the interval (0,1) if both shape ' ...
+                    'parameters (A, B) are equal to 1.'])
             else
-                out = NaN(size(A));
-                out(A(:)>=1 & B(:)>=1) = (A - 1)./(A + B - 2);
-                out(A(:)<1 & B(:)>=1) = 0;
-                out(A(:)>=1 & B(:)<1) = 1;
+                error(['the mode of a gamma distribution is bimodal ' ...
+                    '(specifically, is both 0 *and* 1) if both shape ' ...
+                    'parameters (A, B) are < 1.'])
             end
-          case 'sd'
+          case 'std'
             out = sqrt( (A.*B)./(((A + B).^2) .* (A + B + 1)) );
           otherwise
-            error(['the %s for a %s distribution is not currently defined ' ...
-                'within this function.'],outquantity{n},distribution)
+            error(['the quanitity ''%s'' for a %s distribution ' ...
+                'is not currently defined within this function.'], ...
+                outquantity{n},ditribution)
         end
         
       %exponential distribution, characterized by lambda (rate)
@@ -215,13 +207,14 @@ for n = 1:length(outquantity)
             out = 1./lambda;
           case 'median'
             out = log(2)./lambda;
-          case 'argmax'
+          case 'mode'
             out = 0;
-          case 'sd'
+          case 'std'
             out = sqrt(1./(lambda.^2));
           otherwise
-            error(['the %s for a %s distribution is not currently defined ' ...
-                'within this function.'],outquantity{n},distribution)
+            error(['the quanitity ''%s'' for a %s distribution ' ...
+                'is not currently defined within this function.'], ...
+                outquantity{n},ditribution)
         end
         
       %uniform distribution, characterized by the min (a) and max (b) values
@@ -235,15 +228,15 @@ for n = 1:length(outquantity)
             out = 0.5.*(a + b);
           case 'median'
             out = 0.5.*(a + b);
-          case {'mode','argmax'}
-            error(['cannot compute the %s for a continuous uniform ' ...
-                'distribution as this quantity is defined as any value ' ...
-                'in (a,b).'],outquantity{n})
-          case 'sd'
-            out = sqrt((1/12).*(b - a));
+          case 'mode'
+            error(['the mode of a continuous uniform distribution is ' ...
+                'any value in (a,b).'])
+          case 'std'
+            out = sqrt(1/12).*(b - a);
           otherwise
-            error(['the %s for a %s distribution is not currently defined ' ...
-                'within this function.'],outquantity{n},distribution)
+            error(['the quanitity ''%s'' for a %s distribution ' ...
+                'is not currently defined within this function.'], ...
+                outquantity{n},ditribution)
         end
     end
     samples.(outparameter{n}) = out;
