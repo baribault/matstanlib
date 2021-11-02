@@ -47,7 +47,7 @@ function essintervalplot(samples,diagnostics,parameterRequest)
 %                   improved R^ for assessing convergence of MCMC.  ArXiv.
 % 
 % 
-% See also COMPUTEESS, ESSPLOTS, PLOTMCSE, RANKPLOTS, TRACEDENSITY
+% See also COMPUTEESS, PLOTESS, PLOTMCSE, RANKPLOTS, TRACEDENSITY
 % 
 % (c) beth baribault 2021 ---                                 > matstanlib
 

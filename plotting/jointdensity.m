@@ -128,7 +128,23 @@ axJ  = axes('pos',[0.1 0.1 0.58 0.58]);
 axM1 = axes('pos',[0.1 0.75 0.58 0.2]);
 axM2 = axes('pos',[0.75 0.1 0.2 0.58]);
 
-%... and a nice color
+biplotType = 'ksdensity'; %be VERY cautious in changing this
+
+%number of levels for the contour plots
+nLevels = 6;
+
+%colormap for contour layer (lowest to hightest density)
+lowProbColor = getcolors('lightgray','white','blend');
+highProbColor = 'darkblue';
+switch biplotType
+    case 'ksdensity'
+        cmap = makecolormap(lowProbColor,highProbColor,128);
+    case 'contour'
+        cmap = makecolormap(0.925*[1 1 1],highProbColor,nLevels);
+end
+colormap(cmap)
+
+%marker colors for single samples
 sampleColor = getcolors('darkblue');
 sampleAlpha = 0.125;
 divergentColor = getcolors('red');
@@ -136,9 +152,34 @@ divergentAlpha = 0.65;
 
 %(1) plot joint density
 axes(axJ); hold on
-scatter(chains1(divergent==0),chains2(divergent==0),'sizedata',markSz, ...
-    'markerfacecolor',sampleColor,'markeredgecolor',sampleColor, ...
-    'markerfacealpha',sampleAlpha,'markeredgealpha',sampleAlpha)
+switch biplotType
+  case 'ksdensity'
+    %%% bivariate smoothed density estimate %%%
+    ksdensity(gca,[chains1,chains2],'PlotFcn','contour')
+  case 'contour'
+    %%% bivariate histogram %%%
+    [Fgrid,Xedges,Yedges] = histcounts2(chains1,chains2, ...
+        'normalization','pdf'); %(actually scaling is optional)
+    Fgrid = Fgrid';
+    %midpoints of bins
+    Xmids = (Xedges(1:end-1) + Xedges(2:end))/2;
+    Ymids = (Yedges(1:end-1) + Yedges(2:end))/2; 
+    %... meshgrid
+    [Xgrid,Ygrid] = meshgrid(Xmids,Ymids);
+    maxF = max(Fgrid(:));
+    minF = mink(unique(Fgrid(:)),2);
+    if minF(1)>0, minF = minF(1); else minF = minF(2); end
+    %contour plot where the outermost line/fill includes ALL samples
+    % levels = linspace(eps,maxF,nLevels+1); %eps => exclude Fgrid bins with 0 samples
+    levels = linspace(minF,maxF,nLevels+1); %exclude Fgrid bins with 0 samples
+    contourf(Xgrid,Ygrid,Fgrid, ...
+        'levellist',levels,'fill','on','linecolor','flat') %%%filled
+    % contour(Xgrid,Ygrid,Fgrid,'levellist',levels,'linecolor','k') %%%just outlines
+  case 'scatter'
+    scatter(chains1(divergent==0),chains2(divergent==0),'sizedata',markSz, ...
+        'markerfacecolor',sampleColor,'markeredgecolor',sampleColor, ...
+        'markerfacealpha',sampleAlpha,'markeredgealpha',sampleAlpha)
+end
 scatter(chains1(divergent==1),chains2(divergent==1),'sizedata',markSz, ...
     'markerfacecolor',divergentColor,'markeredgecolor',divergentColor, ...
     'markerfacealpha',divergentAlpha,'markeredgealpha',divergentAlpha)

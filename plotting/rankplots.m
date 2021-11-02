@@ -46,7 +46,7 @@ function rankplots(samples,varargin)
 %   a custom number of bins, NBINS, may be specified.
 % 
 % 
-% See also TRACEDENSITY, ESSPLOTS, PLOTMCSE
+% See also TRACEDENSITY, PLOTESS, PLOTMCSE
 % 
 % (c) beth baribault 2019 ---                                 > matstanlib 
 

@@ -46,7 +46,7 @@ function plotmcse(samples,parameterRequest)
 %                   improved R^ for assessing convergence of MCMC.  ArXiv.
 % 
 % 
-% See also COMPUTEMCSE, ESSPLOTS, RANKPLOTS, TRACEDENSITY
+% See also COMPUTEMCSE, PLOTESS, RANKPLOTS, TRACEDENSITY
 % 
 % (c) beth baribault 2021 ---                                 > matstanlib
 
