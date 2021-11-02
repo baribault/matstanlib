@@ -11,6 +11,9 @@ function [rho_hat,lags] = rho_fft(chains)
 % 
 % (c) beth baribault 2021 ---                                 > matstanlib
 
+import msl.*
+
+%%
 N = size(chains,1); %number of (split) iterations
 M = size(chains,2); %number of (split) chains
 

@@ -12,6 +12,9 @@ function n_eff = ess_BDA2(chains)
 % 
 % (c) beth baribault 2021 ---                                 > matstanlib
 
+import msl.*
+
+%%
 N = size(chains,1); %number of iterations
 M = size(chains,2); %number of chains
 

@@ -89,7 +89,7 @@ function hyperpriortester(xRange,priorForm,idealPriorParams,varargin)
 % 
 % (c) beth baribault 2020 ---                                 > matstanlib 
 
-matstanlib_options
+msl.options
 
 %% parse inputs
 nNamedInp = 3;

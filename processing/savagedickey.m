@@ -56,7 +56,7 @@ function [BF10,BF01] = savagedickey(priorChains,posteriorChains, ...
 % 
 % (c) beth baribault 2019 ---                                 > matstanlib
 
-matstanlib_options
+msl.options
 
 %% parse inputs
 %value at which we will compare the prior vs posterior for delta
@@ -191,12 +191,12 @@ ymax = max(max(f_prior),max(f_post));
 plot(compareAt*[1 1],ymax*2*[0 1],'color',0.85*[1 1 1])
 
 %prior & posterior densities
-priorLineOptions = {'linewidth',linePt*2,'color',[0 0 0],'linestyle','--'};
-postLineOptions = {'linewidth',linePt*2,'color',[0 0 0],'linestyle','-'};
-priorMarkerOptions = {'linewidth',linePt*2, ...
+priorLineOptions = {'linewidth',linePt*1.5,'color',[0 0 0],'linestyle','--'};
+postLineOptions = {'linewidth',linePt*1.5,'color',[0 0 0],'linestyle','-'};
+priorMarkerOptions = {'linewidth',linePt*1.5, ...
     'marker','o','markersize',markSz, ...
     'markeredgecolor','k','markerfacecolor',[1 1 1]};
-postMarkerOptions = {'linewidth',linePt*2, ...
+postMarkerOptions = {'linewidth',linePt*1.5, ...
     'marker','o','markersize',markSz, ...
     'markeredgecolor','k','markerfacecolor',[0 0 0]};
 plot(x_prior,f_prior,priorLineOptions{:})

@@ -66,6 +66,10 @@ function horzdensity(samples,parameterRequest,varargin)
 %       instances. if FILLCOLOR is Nx3 then each row is used for each
 %       successive parameter instance.
 %   
+%   'fillalpha'
+%       override the default fill opacity (1) with a custom opacity
+%       value, FILLALPHA.  FILLALPHA must be between 0 and 1.
+%   
 %   'outlinecolor'
 %       optionally, override the default outline color scheme (all black)
 %       with the color(s) given in MARKERCOLOR.  
@@ -75,6 +79,13 @@ function horzdensity(samples,parameterRequest,varargin)
 %       optionally, override the default median marker color scheme (all
 %       white) with the color(s) given in MARKERCOLOR.  
 %       the size and usage demands are the same as for FILLCOLOR.
+%   
+%   'truecolor'
+%       optionally, override the default true value marker color scheme
+%       (all black) with the color(s) given in TRUECOLOR.  
+%       the size and usage demands are the same as for FILLCOLOR. 
+%       this property is only permissible if a 'truevalues' property-value
+%       pair is also given. 
 %   
 %   'grid'
 %       GRID indicates whether to include a soft horizontal line across the
@@ -97,7 +108,7 @@ function horzdensity(samples,parameterRequest,varargin)
 % 
 % (c) beth baribault 2021 ---                                 > matstanlib 
 
-matstanlib_options
+msl.options
 
 %% parse required inputs
 if nargin < 2
@@ -139,6 +150,7 @@ trueValues = NaN;               addTrueValues = false;
 criticalValue = NaN;
 addInterval = false;
 fillColor = NaN;    %use default colors
+fillAlpha = 1;
 outlineColor = NaN; %use default colors
 markerColor = NaN;  %use default colors
 trueColor = NaN;    %use default colors
@@ -211,6 +223,18 @@ for v = 1:2:length(varargin)
                 end
             else
                 error('fillcolor must be numeric.')
+            end
+        %----------------------------------------------------------------%
+        case 'fillalpha'
+            fillAlpha = varargin{v+1};
+            if ~isnumeric(fillAlpha)
+                error('fillAlpha must be a numeric value.')
+            elseif isempty(fillAlpha)
+                %use default
+            elseif ~isvector(fillAlpha)
+                error('fillAlpha must be scalar or vector.')
+            elseif any(fillAlpha(:) < 0 | fillAlpha(:) > 1)
+                error('fillAlpha must be between 0 and 1.')
             end
         %----------------------------------------------------------------%
         case 'outlinecolor'
@@ -324,6 +348,14 @@ else
         error('fillColor has invalid number of rows.')
     end
 end
+% ... fill alpha
+if isscalar(fillAlpha)
+    fillAlphas = repmat(fillAlpha,[nParameters 1]);
+elseif isequal(length(fillAlpha),nParameters)
+    fillAlphas = fillAlpha;
+else
+    error('the length of fillAlpha does not match the number of parameters.')
+end
 % ... outline
 if any(isnan(outlineColor(:))) || isempty(outlineColor)
     outlineColors = repmat(defaultOutlineColor,[nParameters 1]);
@@ -365,6 +397,7 @@ end
 parameters = parameters(end:-1:1);
 isInstance = isInstance(end:-1:1);
 fillColors = fillColors(end:-1:1,:);
+fillAlphas = fillAlphas(end:-1:1,:);
 outlineColors = outlineColors(end:-1:1,:);
 markerColors = markerColors(end:-1:1,:);
 trueColors = trueColors(end:-1:1,:);
@@ -444,7 +477,7 @@ scaleF = 0.95;      % ... the density (at maximum height)?
 %underlay a line at the critical value
 if ~isnan(criticalValue)
     line(criticalValue*[1 1],[-2 nParameters+2], ...
-        'color',0.25*[1 1 1],'linestyle','-')
+        'color',0.25*[1 1 1],'linestyle',':')
 end
 
 if (scaleF+drop)>1, error('scaleF & drop cannot sum to  > 1.'); end
@@ -473,7 +506,7 @@ for n = 1:nParameters
             %(duping start and end values in fill to ensure that the shape is 
             %closed if up even if most values are against an end boundary)
             fill([xs(1)-eps xs xs(end)+eps],[n n+fs n],fillColors(n,:), ...
-                'edgecolor','none')
+                'facealpha',fillAlphas(n),'edgecolor','none')
         end
     end
     %outline the density
@@ -499,7 +532,7 @@ for n = 1:nParameters
     %overlay point estimate (dashed line)
     if addEstimate
         [~,indMean] = min(abs(x-m));%get closest function height
-        plot(m*[1 1],[n n+f(indMean)],':','color',outlineColors(n,:))
+        plot(m*[1 1],[n n+f(indMean)],'-','color',outlineColors(n,:))
     end
     %overlay true value (star marker, at bottom)
     if addTrueValues

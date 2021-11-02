@@ -1,12 +1,14 @@
 function tracedensity(samples,varargin)
 %TRACEDENSITY displays chain traces and a marginal density for each parameter.
 % 
-% this function will generate one figure per parameter, where each figure
-% contains a chain trace plot and a marginal density histogram.  
+% this function will generate one figure per parameter instance, where each
+% figure contains a plot of the chain traces (a "trace plot") beside a
+% marginal density histogram of the samples from all chains.  
+% 
 % optionally, diagnostic overlays may be included. 
 % 
-% a maximum of 25 trace plots may be generated in a single call, to
-% minimize the risk of memory overload.  
+% NOTE: a maximum of 25 figures may be generated in a single call, to
+%       mitigate the risk of memory overload.  
 % 
 % 
 % TRACEDENSITY(SAMPLES)
@@ -14,8 +16,8 @@ function tracedensity(samples,varargin)
 %   SAMPLES is the structure of posterior samples (in the format generated
 %   by extractsamples.m).  
 %   
-%   if SAMPLES is the only input, then a figure for all parameters/
-%   parameter instances will (attempt to) be generated.  
+%   if SAMPLES is the only input, then a figure will be generated for every
+%   instance of every parameter found in SAMPLES (if < max # of figures).  
 %   if PARAMETERREQUEST is also given, then a figure for only the requested
 %   parameters/parameter instances will be generated.   
 %   
@@ -33,31 +35,56 @@ function tracedensity(samples,varargin)
 %   parameter instance names (e.g., '*_alpha', 'beta[*,1]').
 % 
 % 
-% TRACEDENSITY(...,'ranknorm',...)
-%   adding the string 'ranknorm' to the inputs 
-% 
-% 
 % TRACEDENSITY(..., DIAGNOSTICS)
-%   if the DIAGNOSTICS structure is also given, rug plots of divergent
-%   transitions (if any occured) and a rugplot of iterations where the
-%   maximum tree depth was hit (if any), will be added to the bottom of the
-%   plot.  
-% 
 % TRACEDENSITY(..., DIAGNOSTICS,MAXTREEDEPTH)
+%   if the DIAGNOSTICS structure is also given, rug plots will be included
+%   in a gray area beneath the chain traces.  
+%   a rug plot for divergent transitions (if any) is shown in red, and 
+%   a rug plot for whether the maximum tree depth was hit (if it was ) is
+%   shown in orange.  
+%   (if neither diagnostic was problematic, no rug plot is included.)  
+% 
 %   if a maximum tree depth other than the default value of 10 was used
 %   during sampling with the NUTS algorithm, it should be given as a final
 %   optional input, MAXTREEDEPTH. 
 % 
 % 
-% See also RANKPLOTS, EXTRACTSAMPLES
+% TRACEDENSITY(SAMPLES,...,'ranknorm',...)
+%   including the string 'ranknorm' as an optional input trigger each
+%   chain trace to be rank-normalized before plotting.  
+%   (this may be useful for diagnostic purposes.)
+% 
+% 
+% See also RANKPLOTS, EXTRACTSAMPLES, ESSPLOTS, PLOTMCSE
 % 
 % (c) beth baribault 2019 ---                                 > matstanlib 
 
-matstanlib_options
+msl.options
 
 %% parse inputs
 %samples
-if ~isstruct(samples)
+if isstruct(samples)
+    %gave samples
+elseif isnumeric(samples) && ismatrix(samples)
+    %gave chains
+    chainParam = '';
+    if ~isempty(varargin)
+        isParamStr = ...
+            cellfun(@(x) ischar(x) && ~strcmp(x,'ranknorm'),varargin);
+        if any(isParamStr)
+            chainParamInd = find(isParamStr,1);
+            if ~isempty(varargin{chainParamInd})
+                chainParam = varargin{chainParamInd};
+            end
+            varargin(isParamStr) = []; %pop out of varargin
+        end
+    end
+    if isempty(chainParam), chainParam = 'NO_TITLE'; end
+    %convert to struct
+    tmp_samples.(chainParam) = samples;
+    clearvars samples
+    samples = tmp_samples;
+else
     error(['first input must be a structure of posterior samples ' ...
         '(consisitent with the output of extractsamples.m).'])
 end
@@ -76,9 +103,14 @@ end
 %parameterRequest
 if isempty(varargin) || ...
         ~(isempty(varargin{1}) || ischar(varargin{1}) || iscell(varargin{1}))
+    %if no parameterRequest given, request all parameter names
     parameterRequest = fieldnames(samples); %default
-else                                  %pop out of varargin
-    parameterRequest = varargin{1};   varargin = varargin(2:end);
+else
+    %if parameterRequest given ...
+    parameterRequest = varargin{1};
+    %... pop it out of varargin ... 
+    varargin = varargin(2:end);
+    %... then parse:
     if isempty(parameterRequest)
         parameterRequest = fieldnames(samples); %default
     elseif ischar(parameterRequest)
@@ -204,23 +236,24 @@ for p = 1:min([length(parameters),maxNfigures])
     hold on
     %dummy thick lines for legend
     h = gobjects([1 nChains]);
-    for n = 1:nChains
-        h(n) = plot(-1,chains(1,1),'color',chainColors(n,:),'linewidth',linePt*3);
+    for m = 1:nChains
+        h(m) = plot(-1,chains(1,1),'color',chainColors(m,:),'linewidth',linePt*3);
     end
     %actual traces
-    for n = 1:size(chains,2)
-        plot(chains(:,n),'color',chainColors(n,:))%,'linewidth',linePt)
+    for m = 1:size(chains,2)
+        plot(chains(:,m),'color',chainColors(m,:))%,'linewidth',linePt)
     end
-%     %title, with Rhat
-%     rhat = splitrhat(chains);
-%     protectedParam = strrep(parameters{p},'_','\_'); 
-%     title({['\bf ' protectedParam],['\rm ' sprintf('Rhat = %.3f',rhat)]}, ...
-%         'fontweight','normal','interpreter','tex'), with Rhat
-    protectedParam = strrep(parameters{p},'_','\_'); 
-    title(protectedParam,'interpreter','tex')
-    %format x-axis
+    %add , with Rhat
+    %format
     xlim([0 nIterations+1])
     xlabel('iteration')
+    if ~strcmp(parameters{p},'NO_TITLE')
+        title(parameters{p},'interpreter','none')
+    else
+        % protectedParam = strrep(parameters{p},'_','\_'); 
+        title(sprintf('$\\hat{R}$ = %.3f',computerhat(chains)), ...
+        'fontweight','normal','interpreter','latex')
+    end
     
     %%% rug plots (plot divergences, hit max treedepth) %%%
     if overlayDx
@@ -257,14 +290,15 @@ for p = 1:min([length(parameters),maxNfigures])
     ax2 = axes('position',ax2pos);
     hold on
     %histogram of samples
-    histogram(chains(:),'orientation','horizontal', ...
-        'facecolor',getcolors('gray'),'edgecolor',getcolors('gray'))
+    h = histogram(chains(:),'normalization','pdf', ...
+        'facecolor',0.65*[1 1 1],'edgecolor',0.65*[1 1 1], ...
+        'orientation','horizontal');
     %line at posterior mean
-    plot(xlim,postMean*[1 1],'k-','linewidth',linePt)
+    xPos = [0 max(h.Values)*1.1];%xPos = xlim;
+    plot(xPos,postMean*[1 1],'k-','linewidth',linePt)
     %line at posterior median
-    plot(xlim,postMean*[1 1],'k--','linewidth',linePt)
+    plot(xPos,postMean*[1 1],'k--','linewidth',linePt)
     %format
-%     set(ax2,'ylim',ax1.YLim,'ytick',ax1.YTick);
     set(ax2,'ylim',ax1.YLim,'ytick',ax1.YTick,'yticklabels',{});
     set(ax2,'xtick',[],'box','off')
     set(ax2,'fontsize',fontSz,'xcolor','w')
@@ -272,6 +306,6 @@ for p = 1:min([length(parameters),maxNfigures])
 %         'fontweight','normal','fontsize',fontSz-2)
     xlabel({'marginal','posterior','density'},'color','k', ...
         'fontsize',fontSz-2)
-end    
+end
 
 end

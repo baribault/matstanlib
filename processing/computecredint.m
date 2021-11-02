@@ -18,6 +18,9 @@ function CI = computecredint(chains,varargin)
 %   PROPORTION specifies a different % credible interval, as a propotion.
 %   as such, PROPORTION must be between 0 and 1 (but cannot be 0).
 %   the default value for PROPORTION is 0.95.
+%   *** NOTE: if the requested % CI is so low that there are not enough
+%   *** samples to offer an interval (i.e., PROPORTION is < 2/nSamples),
+%   *** then CI will be [NaN NaN]. 
 %   
 % CI = COMPUTECREDINT(...,CIMETHOD)
 %   CIMETHOD indicates how the credible interval is to be computed. 
@@ -79,6 +82,14 @@ for v = 1:length(varargin)
     end
 end
 
+% %% check there are enough samples to actually compute an *interval*
+% nSamples = numel(chains);
+% if proportion < 2/nSamples
+%     error(['there are not enough samples to compute a %g%% credible interval!' ...
+%         '(%i samples are available, but at least %i would be needed.)'], ...
+%         proportion*100,nSamples,ceil(2/nSamples*100))
+% end
+
 %% compute credible interval
 chains = chains(:);
 
@@ -91,16 +102,26 @@ switch CImethod
     case {'hdi','hpd'}
         %how many samples required for this % CI?
         nSamples = numel(chains);
-        nInCI = floor(nSamples*proportion); 
-        nIntervals = nSamples - nInCI;
+        nInCI = max(floor(nSamples*proportion),1);
+        nIntervals = nSamples - nInCI + 1;
         %which of all possible intervals is the shortest?
         orderedSamples = sort(chains,'ascend');
         width = NaN([nIntervals 1]);
         for n = 1:nIntervals 
-            width(n) = diff([orderedSamples(n) orderedSamples(n + nInCI)]);
+            width(n) = diff([orderedSamples(n) orderedSamples(n + nInCI - 1)]);
         end
-        [~,start] = min(width);
-        CI = [orderedSamples(start) orderedSamples(start + nInCI)];
+        minWidth = min(width);
+        %cope with one vs. many possible shortest intervals
+        startIndices = find(width==minWidth);
+        if isscalar(startIndices)
+            %if there is a single shortest HDI
+            start = startIndices;
+        else
+            %if multiple shortest HDI, pick the one in the middle
+            [~,start] = min(abs(startIndices+minWidth/2 - ceil(nSamples/2)));
+        end
+        %return HDI
+        CI = [orderedSamples(start) orderedSamples(start + nInCI -1)];
 end
 
 end

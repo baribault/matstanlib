@@ -31,6 +31,13 @@ function varargout = plotintervals(samples,parameterRequest,varargin)
 %         [vector]  >>  applies the given custom ordering
 %       NOTE: if SORTBY is a vector, it must contain only positive integers.
 %   
+%   'linecolor'
+%       LINECOLOR overrides the default caterpillar colors (all black). 
+%       LINECOLOR must be a 1x3 or Nx3 matrix of RGB-01 colors (where N is
+%       the number of parameter instances).  if LINECOLOR is 1x3, then the
+%       same color is used for all parameter instances. if LINECOLOR is Nx3
+%       then each row is used for each successive parameter instance.
+%   
 %   'criticalValue'
 %       CRITICALVALUE must be a scalar, numerical value.  
 %       supplying CRITICALVALUE triggers the overlay of a vertical line at 
@@ -49,12 +56,12 @@ function varargout = plotintervals(samples,parameterRequest,varargin)
 %       if given, then a star marker will be added at the bottom of each
 %       density at the true value for that [instance of the] parameter.   
 %   
-%   'linecolor'
-%       LINECOLOR overrides the default caterpillar colors (all black). 
-%       LINECOLOR must be a 1x3 or Nx3 matrix of RGB-01 colors (where N is
-%       the number of parameter instances).  if LINECOLOR is 1x3, then the
-%       same color is used for all parameter instances. if LINECOLOR is Nx3
-%       then each row is used for each successive parameter instance.
+%   'truecolor'
+%       optionally, override the default true value marker color scheme
+%       (all black) with the color(s) given in TRUECOLOR.  
+%       the size and usage demands are the same as for LINECOLOR. 
+%       this property is only permissible if a 'truevalues' property-value
+%       pair is also given. 
 %   
 %   'ygrid'
 %       YGRID indicates whether to include a soft horizontal line across
@@ -88,7 +95,7 @@ function varargout = plotintervals(samples,parameterRequest,varargin)
 % 
 % (c) beth baribault 2021 ---                                 > matstanlib 
 
-matstanlib_options
+msl.options
 
 %% parse required inputs
 if nargin < 2
@@ -150,12 +157,10 @@ CImethod = 'central';           validCIMethods = {'central','hdi'};
 varargin(1:2:length(varargin)) = ... %case insensitive (convert all to lower case)
     cellfun(@lower,varargin(1:2:length(varargin)),'uni',0);
 for v = 1:2:length(varargin)
-    varargname = varargin{v};
-    varargvalue = varargin{v+1};
-    switch varargname
+    switch varargin{v}
         %----------------------------------------------------------------%
         case 'linecolor'
-            lineColor = varargvalue;
+            lineColor = varargin{v+1};
             if isscalar(lineColor) && (isnan(lineColor) || isempty(lineColor))
                 %do nothing --- will use default colors
             elseif isnumeric(lineColor)
@@ -171,7 +176,7 @@ for v = 1:2:length(varargin)
             end
         %----------------------------------------------------------------%
         case 'criticalvalue'
-            criticalValue = varargvalue;
+            criticalValue = varargin{v+1};
             if ~isnumeric(criticalValue) || ~isscalar(criticalValue)
                 error('criticalvalue must be a single number.')
             end
@@ -206,7 +211,7 @@ for v = 1:2:length(varargin)
             end
 %         %----------------------------------------------------------------%
 %         case 'subset'
-%             subset = varargvalue;
+%             subset = varargin{v+1};
 %             if isnumeric(subset) && ~isscalar(subset) && isvector(subset)
 %                 if ~(all(mod(subset,1)==0) && all(subset>0))
 %                     error('subset can only include positive integers.')
@@ -216,7 +221,7 @@ for v = 1:2:length(varargin)
 %             end
         %----------------------------------------------------------------%
         case 'sortby'
-            sortBy = varargvalue;
+            sortBy = varargin{v+1};
             if isnumeric(sortBy) && ~isscalar(sortBy) && iscolumn(sortBy)
                 if all(mod(sortBy,1)==0) && all(sortBy>0)
                     sortOrder = sortBy;
@@ -233,7 +238,7 @@ for v = 1:2:length(varargin)
             end
         %----------------------------------------------------------------%
         case 'ygrid'
-            ygridOnOff = varargvalue;
+            ygridOnOff = varargin{v+1};
             if ~ischar(ygridOnOff)
                 error('ygrid must be a string (@ischar==true).')
             elseif ~ismember(ygridOnOff,validYgridOnOff)
@@ -242,7 +247,7 @@ for v = 1:2:length(varargin)
             end
         %----------------------------------------------------------------%
         case 'outer'
-            outer = varargvalue;
+            outer = varargin{v+1};
             if ~isnumeric(outer) || ~isscalar(outer)
                 error('outer must be a single number.')
             elseif outer < 0 || outer > 1
@@ -250,7 +255,7 @@ for v = 1:2:length(varargin)
             end
         %----------------------------------------------------------------%
         case 'inner'
-            inner = varargvalue;
+            inner = varargin{v+1};
             if ~isnumeric(inner) || ~isscalar(inner)
                 error('inner must be a single number.')
             elseif inner < 0 || inner > 1
@@ -258,7 +263,7 @@ for v = 1:2:length(varargin)
             end
         %----------------------------------------------------------------%
         case 'cimethod'
-            CImethod = lower(varargvalue);
+            CImethod = lower(varargin{v+1});
             if ~ischar(CImethod)
                 error('CImethod must be a string (@ischar==true).')
             elseif ~ismember(CImethod,validCIMethods)
@@ -268,7 +273,7 @@ for v = 1:2:length(varargin)
         %----------------------------------------------------------------%
         otherwise
             error('the optional input name ''%s'' was not recognized.', ...
-                varargname)
+                varargin{v})
     end
 end
 

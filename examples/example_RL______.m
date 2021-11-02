@@ -24,12 +24,12 @@ nThin       = 1;
 %an absolute path to a location for saved output
 % output_dir = '/my/custom/dir/';
 % output_dir = pwd;
-output_dir = [pwd filesep 'output_' project];
+outputDir = [pwd filesep 'output_' project];
 
 %an absolute path to a location for Stan output files
 % working_dir = '/my/custom/dir/';
 % working_dir = output_dir;
-working_dir = ['/tmp/wdir_' project];
+workingDir = ['/tmp/wdir_' project];
 
 %delete all temp files after stan finishes and selected output is saved?
 clean_up_working_dir = true;
@@ -39,28 +39,28 @@ fprintf('\n\n**********\n\npreparing to run the %s model.\n', ...
     upper(project))
 
 %output directory
-if ~isequal(output_dir(end),filesep)
-    output_dir(end+1) = filesep;
+if ~isequal(outputDir(end),filesep)
+    outputDir(end+1) = filesep;
 end
-fprintf('\noutput will be saved to:\n> %s\n',output_dir)
-if ~exist(output_dir,'dir')
+fprintf('\noutput will be saved to:\n> %s\n',outputDir)
+if ~exist(outputDir,'dir')
     fprintf(['    currently this directory does not exist.  \n' ...
         '    making the directory now ... '])
-    mkdir(output_dir)
+    mkdir(outputDir)
     fprintf('done.\n')
 end
 
 %working directory
-if ~isequal(working_dir(end),filesep)
-    working_dir(end+1) = filesep;
+if ~isequal(workingDir(end),filesep)
+    workingDir(end+1) = filesep;
 end
 fprintf(['\nStan files will be saved to the working directory:\n' ...
-    '> %s\n'], working_dir)
-if ~isequal(output_dir,working_dir)
-    if ~exist(working_dir,'dir')
+    '> %s\n'], workingDir)
+if ~isequal(outputDir,workingDir)
+    if ~exist(workingDir,'dir')
         fprintf(['    currently this directory does not exist.  \n' ...
             '    making the directory now ... '])
-        mkdir(working_dir)
+        mkdir(workingDir)
         fprintf('done.\n')
     end
 end
@@ -117,7 +117,7 @@ Correct = NaN([nData 1]);
 
 softmax = @(x) exp(x)/sum(exp(x));
 
-n = 0;
+n = 0; %(initialize data point counter)
 for s = 1:nSubjects
     for t = 1:nTrials(s)
         %if first trial, initialize value
@@ -277,12 +277,12 @@ model_code = {
 };
 
 %write the model code to a .stan file
-stanfile = [working_dir project '.stan'];
+stanfile = [workingDir project '.stan'];
 stanfileID = fopen(stanfile,'w');
 fprintf(stanfileID,'%s\n',model_code{:});
 fclose(stanfileID);
 %copy file to output directory
-copyfile(stanfile,output_dir)
+copyfile(stanfile,outputDir)
 
 %% compile the model
 tic
@@ -306,7 +306,7 @@ fit =  sm.sampling('file',  stanfile, ...
             'iter',         nIterations, ...
             'thin',         nThin, ...
             'verbose',      true, ...
-            'working_dir',  working_dir);
+            'working_dir',  workingDir);
 fit.block();
 stanSummary = fit.print;
 fprintf('\n**********\n\ndone!\n')
@@ -315,35 +315,27 @@ runtime = toc;
 fprintf('\nsampling took %.2f seconds.\n',runtime)
 
 %% extract from the StanFit object
-[samples,diagnostics] = extractsamples(fit);
+[samples,diagnostics] = extractsamples('matlabstan',fit);
 parameters = fieldnames(samples);
-instances = expandparamnames(parameters, ...
-    struct2cell(structfun(@size,samples,'uni',0)));
-% logLikelihood = fit.extract.log_lik;
-% mstan.waic(logLikelihood)
+instances = getparaminstances([],samples);
 
+%clean up after MATLABStan
 clearvars fit
-%% clean up
-if clean_up_working_dir
-    delete([working_dir '*'])
-    rmdir(working_dir)
-end
+%clean up after Stan
+if clean_up_working_dir, delete([workingDir '*']); rmdir(workingDir); end
 
 %% diagnostic report
 %calculate any convergence diagnostics based on posterior samples
-rtable = rhattable(samples);
+posteriorTable = mcmctable(samples);
 %print a report about all mcmc diagnostics
-interpretdiagnostics(diagnostics,rtable)
+interpretdiagnostics(diagnostics,posteriorTable)
 
 %% get parameter estimates & other statistics
 estimatedValues = getsamplestats(samples,trueValues);
 
-%% save output
-save([output_dir project '.mat'])
-
 %% output reports & plots
 figure;
-plotlp(diagnostics,rtable)
+plotlp(diagnostics,posteriorTable)
 
 recoveryCounts = [0 0];
 requests = {'alpha','beta', ...

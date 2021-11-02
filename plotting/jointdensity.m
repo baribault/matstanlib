@@ -34,7 +34,7 @@ function jointdensity(samples,parameter1,parameter2,varargin)
 % 
 % (c) beth baribault 2019 ---                                 > matstanlib 
 
-matstanlib_options
+msl.options
 
 %% parse inputs
 if nargin < 3
@@ -49,12 +49,53 @@ end
 %parameter1, parameter2
 if ~ischar(parameter1), error('parameter1 must be a string (@ischar==true).'); end
 if ~ischar(parameter2), error('parameter2 must be a string (@ischar==true).'); end
-for n = 1:2
-    %... don't want to repeat code ...
-    if n==1,     [parameter,ind] = str2ind(parameter1); paramInput = parameter1;
-    elseif n==2, [parameter,ind] = str2ind(parameter2); paramInput = parameter2;
+
+%%% optional input %%%
+samplesOnly = true;
+if isempty(varargin)
+    %do nothing
+elseif length(varargin)==1
+    %highlight divergent transitions
+    samplesOnly = false;
+    if isstruct(varargin{1}) && isfield(varargin{1},'divergent__')
+        divergent = varargin{1}.divergent__;
+    elseif isnumeric(varargin{1}) && ismatrix(varargin{1}) ...
+            && all(ismember(varargin{1}(:),[0 1]))
+        divergent = varargin{1};
+    else
+        error(['the optional input must be either the diagnostics ' ...
+            'structure or a matrix of divergent transition indicators ' ...
+            '(including 0 and 1 values only).'])
     end
-    if isempty(ind)
+else
+    error('too many inputs.')
+end
+
+%% get chains for each parameter
+
+% chains1 = binornd(10,0.3,size(chains1)); %test discrete
+
+for n = 1:2
+    if n==1,     [parameter,ind] = str2ind(parameter1);
+    elseif n==2, [parameter,ind] = str2ind(parameter2);
+    end
+    if ~isfield(samples,parameter)
+        error(['parameter%i input is invalid because ''%s'' ' ...
+            'is not a known field in samples.'],n,parameter)
+    end
+    %extract chains (with a different method if scalar vs. instance given)
+    if ~isempty(ind)
+        %instance name given
+        nParamDims = ndims(samples.(parameter)) - 2;
+        if length(ind) ~= nParamDims
+            error(['the number of indices (%i) in the given parameter%i ' ...
+                'instance name does not match the actual number of ' ...
+                'parameter dimensions (%i).'],length(ind),n,nParamDims)
+        end
+        if n==1,     chains1 = reshape(samples.(parameter)(:,:,ind{:}),[],1);
+        elseif n==2, chains2 = reshape(samples.(parameter)(:,:,ind{:}),[],1);
+        end
+    else
         %parameter name given
         if ismatrix(samples.(parameter))
             %scalar parameter
@@ -67,38 +108,12 @@ for n = 1:2
                 'to specify which parameter instance (e.g., ''%s[3]'') ' ...
                 'is to be used.'],n,parameter,parameter)
         end
-    else
-        %instance name given
-        nParamDims = ndims(samples.(parameter)) - 2;
-        if length(ind) ~= nParamDims
-            error(['the number of indices (%i) in the given parameter%i ' ...
-                'instance name does not match the actual number of ' ...
-                'parameter dimensions (%i).'],length(ind),n,nParamDims)
-        end
-        if n==1,     chains1 = reshape(samples.(parameter)(:,:,ind{:}),[],1);
-        elseif n==2, chains2 = reshape(samples.(parameter)(:,:,ind{:}),[],1);
-        end
     end
 end
 
-%%% optional input %%%
-if isempty(varargin)
-    %do nothing
-elseif length(varargin)==1
-    %highlight divergent transitions
-    if isstruct(varargin{1}) && isfield(varargin{1},'divergent__')
-        divergent = varargin{1}.divergent__;
-    elseif isnumeric(varargin{1}) && ismatrix(varargin{1})
-        divergent = varargin{1};
-    else
-        error(['the optional input must be either the diagnostics ' ...
-            'structure or a matrix of divergent transition indicators.'])
-    end
-else
-    error('too many inputs.')
+if samplesOnly
+    divergent = zeros(size(chains1));
 end
-
-% chains1 = binornd(10,0.3,size(chains1)); %test discrete
 
 %% plot bivariate density
 %start a figure ...
@@ -114,21 +129,19 @@ axM1 = axes('pos',[0.1 0.75 0.58 0.2]);
 axM2 = axes('pos',[0.75 0.1 0.2 0.58]);
 
 %... and a nice color
-sampleColor = getcolors('gray');
+sampleColor = getcolors('darkblue');
 sampleAlpha = 0.125;
 divergentColor = getcolors('red');
 divergentAlpha = 0.65;
 
 %(1) plot joint density
 axes(axJ); hold on
-scatter(chains1,chains2,'sizedata',markSz, ...
+scatter(chains1(divergent==0),chains2(divergent==0),'sizedata',markSz, ...
     'markerfacecolor',sampleColor,'markeredgecolor',sampleColor, ...
     'markerfacealpha',sampleAlpha,'markeredgealpha',sampleAlpha)
-if exist('divergent','var')
-    scatter(chains1(divergent==1),chains2(divergent==1),'sizedata',markSz, ...
+scatter(chains1(divergent==1),chains2(divergent==1),'sizedata',markSz, ...
     'markerfacecolor',divergentColor,'markeredgecolor',divergentColor, ...
     'markerfacealpha',divergentAlpha,'markeredgealpha',divergentAlpha)
-end
 %format plot
 set(gca,'fontsize',fontSz,'box','on','xgrid','on','ygrid','on')
 if exist('parameter1','var'); xlabel(parameter1,'fontweight','bold','interpreter','none'); end

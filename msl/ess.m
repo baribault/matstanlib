@@ -29,6 +29,8 @@ function ESS = ess(chains,varargin)
 % 
 % (c) beth baribault 2021 ---                                 > matstanlib
 
+import msl.*
+
 %% check inputs
 if ~isnumeric(chains) && ~ismatrix(chains)
     error(['the first input must be chains, a [nIterations nChains]-sized ' ...

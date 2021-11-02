@@ -19,6 +19,8 @@ function PSRF = psrf(chains)
 % 
 % (c) beth baribault 2021 ---                                 > matstanlib
 
+import msl.*
+
 %% check inputs
 if nargin < 1, error('a chains matrix is required.'); end
 %chains

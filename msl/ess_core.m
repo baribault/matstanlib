@@ -22,27 +22,40 @@ function ESS = ess_core(chains,proportion)
 % 
 % (c) beth baribault 2021 ---                                 > matstanlib 
 
+import msl.*
+
 %% check inputs
 if nargin < 1, error('a chains matrix is required.'); end
 %chains
 if ~isnumeric(chains) || ~ismatrix(chains)
-    error('sole input must be chains, a matrix of posterior samples.')
+    error('first input must be chains, a matrix of posterior samples.')
 end
 
 %proportion
 if nargin < 2 || isempty(proportion)
     proportion = NaN; %default
-elseif isscalar(proportion) && isnumeric(proportion)
-    if proportion <= 0 || proportion >= 1
+elseif isnumeric(proportion) && ismember(numel(proportion),[1 2])
+    if any(proportion <= 0 | proportion >= 1)
         error('proportion must be in the interval (0,1).')
+    elseif numel(proportion)==2 && proportion(1)>=proportion(2)
+        error(['if proportion has two elements, the first element ' ...
+            'cannot be greater than or equal to the second.'])
     end
 else
-    error('proportion must be a single numeric value.')
+    error(['proportion must be a single numeric value (for quantiles) ' ...
+        'or a pair of values (if local).'])
 end
 
 %% if ESS is relative to a quantile, convert to indicators
 if ~isnan(proportion)
-    chains = chains <= quantile(chains(:),proportion);
+    if numel(proportion)==1
+        %quantile
+        chains = chains <= quantile(chains(:),proportion);
+    else
+        %local
+        chains = (quantile(chains(:),proportion(1)) <= chains) &  ...
+                 (chains <= quantile(chains(:),proportion(2)));
+    end 
     chains = double(chains); %not f*cking logical type, christ
 end
 

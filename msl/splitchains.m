@@ -13,6 +13,9 @@ function chains = splitchains(chains)
 % 
 % (c) beth baribault 2021 ---                                 > matstanlib
 
+import msl.*
+
+%%
 N = floor(size(chains,1)/2); %number of (split) iterations
 
 % chains = [chains(end-2*N+1:end-N,:) chains(end-N+1:end,:)]; %skip first sample

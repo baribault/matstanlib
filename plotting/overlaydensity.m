@@ -86,7 +86,7 @@ function [varargout] = overlaydensity(samples,parameterRequest,varargin)
 % 
 % (c) beth baribault 2021 ---                                 > matstanlib 
 
-matstanlib_options
+msl.options
 
 %% parse required inputs
 if nargin < 2
@@ -277,9 +277,11 @@ else
 end
 % ... fill alpha
 if isscalar(fillAlpha)
-    fillAlpha = repmat(fillAlpha,[nParameters 1]);
-elseif ~isequal(length(fillAlpha),nParameters)
-    error('the lenght of fillAlpha does not match the number of parameters.')
+    fillAlphas = repmat(fillAlpha,[nParameters 1]);
+elseif isequal(length(fillAlpha),nParameters)
+    fillAlphas = fillAlpha;
+else
+    error('the length of fillAlpha does not match the number of parameters.')
 end
 % ... outline
 if any(isnan(outlineColor(:))) || isempty(outlineColor)
@@ -378,7 +380,7 @@ end
 h = gobjects([1 nParameters]);
 for n = 1:nParameters
     h(n) = fill([0 1 1 0 0], maxF*[-2 -2 -2.1 -2.1 -2],fillColors(n,:), ...
-        'edgecolor',outlineColors(n,:),'facealpha',fillAlpha(n));
+        'edgecolor',outlineColors(n,:),'facealpha',fillAlphas(n));
 end
 
 for n = 1:nParameters
@@ -403,7 +405,7 @@ for n = 1:nParameters
             %(duping start and end values in fill to ensure that the shape is 
             %closed if up even if most values are against an end boundary)
             fill([xs(1)-eps xs xs(end)+eps],[0 fs 0],fillColors(n,:), ...
-                'edgecolor','none','facealpha',fillAlpha(n))
+                'edgecolor','none','facealpha',fillAlphas(n))
         end
     end
     %outline the density

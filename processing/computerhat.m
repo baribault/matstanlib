@@ -64,16 +64,16 @@ end
 %% compute Rhat
 switch method
     case {'current','vehtari','folded-split','folded'}
-        rhat_bulk = psrf(ranknorm(splitchains( ...
-                         abs(chains - median(chains(:))) )));   %folded
-        rhat_tail = psrf(ranknorm(splitchains(chains)));        %not folded
+        rhat_bulk = msl.psrf(msl.ranknorm(msl.splitchains( ...
+                         abs(chains - median(chains(:))) ))); %folded
+        rhat_tail = msl.psrf(msl.ranknorm(msl.splitchains(chains))); %not folded
         RHAT = max(rhat_bulk,rhat_tail);
         
     case {'BDA3','split'}
-        RHAT = psrf(splitchains(chains));
+        RHAT = msl.psrf(msl.splitchains(chains));
         
     case {'BDA2','unsplit'}
-        RHAT = psrf(chains);
+        RHAT = msl.psrf(chains);
 end
 
 end

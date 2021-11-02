@@ -28,7 +28,7 @@ function plotautocorr(varargin)
 % 
 % (c) beth baribault 2019 ---                                 > matstanlib 
 
-matstanlib_options
+msl.options
 
 %% parse required inputs
 if nargin == 0

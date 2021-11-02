@@ -1,23 +1,39 @@
 
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-% this script demonstrates data simulation, model fitting, and parameter
-% recovery for a Pearson correlation model in Stan. 
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%  EXAMPLE_CORRELATION  %%%%%%%%%%%%%%%%%%%%%%%%%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% this script implements a Pearson correlation as a Bayesian model. 
 % 
-% the model specification is an adaptation of the 'Correlation_1' model
-% from Chapter 5.1 in:
-%       Lee, M.D. & Wagenmakers, E.J. (2014). Bayesian cognitive modeling:
-%           A practical course. Cambridge University Press.
+% the model specification is an adaptation for Stan of the 'Correlation_1'
+% model from Chapter 5.1 in Lee & Wagenmakers (2014; pp. 60--61). 
+% 
+% this example demonstrates good structure for MATLAB code that implements
+% Bayesian models of any flavor: 
+%           (1) a section just for inputs
+%           (2) basic setup (e.g., setting paths for Stan output)
+%           (3) loading/simulating data & data formatting
+%           (4) model specification
+%           (5) compiling and running the model via Stan
+%           (6) extracting samples from the interface & cleaning up
+%           (7) running diagnostic checks
+%           (-) ... and so on. 
+% it also emphasizes how matstanlib's plots support assessment of the 
+% quality of parameter recovery in addition to a Bayesian hypothesis test.
+% 
 % 
 % to run this script, the following must be installed: 
 %       Stan        >>  https://mc-stan.org/
 %       MATLABStan  >>  https://github.com/brian-lau/MatlabStan
-%       matstanlib  >>  https://github.com/baribault/matstanlib 
+%       matstanlib  >>  https://github.com/baribault/matstanlib
+% 
+% Reference:    Lee, M.D. & Wagenmakers, E.J. (2014). Bayesian cognitive
+%                   modeling: A practical course. Cambridge University 
+%                   Press. 
 % 
 % (c) beth baribault 2019 ---                                 > matstanlib
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
+close all
 clear
 clc
 
@@ -27,21 +43,18 @@ modelName = 'example_correlation';
 
 %sampler settings
 nChains     = 4;        %how many chains?
-nWarmup     = 500;      %how many iterations during warmup?
-nIterations = 7500;     %how many iterations after warmup?
-             % ^^^ very high, to help out the Savage-Dickey Bayes factor
+nWarmup     = 1000;     %how many iterations during warmup?
+nIterations = 1000;     %how many iterations after warmup?
 
-%an absolute path to a location for (temporary) Stan output files
-% workingDir = '/my/custom/dir/';
-workingDir = [pwd filesep modelName];
+%an absolute path to a (temporary) location for Stan output files:
+workingDir = [pwd filesep 'wdir_' modelName];
 
-%delete all temp files after stan finishes and selected output is saved?
+%delete temporary files after Stan finishes and output has been returned?
 %(this helps prevent compilation conflicts, etc.)
 cleanUp = true;
 
-%% prepare for output
-fprintf('\n\n**********\n\npreparing to run the %s model.\n', ...
-    upper(modelName))
+%% setup
+fprintf('\n\n************\n\npreparing to run the %s model.\n',modelName)
 
 %working directory
 if ~isequal(workingDir(end),filesep), workingDir(end+1) = filesep; end
@@ -56,6 +69,7 @@ end
 
 %% data
 fprintf('\nsimulating data ... ')
+
 %known features of the experiment
 nObservations = 100;
 
@@ -73,7 +87,7 @@ x = mvnrnd(mu,E,nObservations);
 trueValues = collecttruevalues(mu,sigma,rho);
 
 %collect data for Stan
-data = struct('x',x,'N',nObservations);
+dataStruct = struct('x',x,'N',nObservations);
 
 fprintf('done!\n')
 
@@ -108,43 +122,37 @@ modelCode = {
     '  x ~ multi_normal(mu,E);            //MVN likelihood'
     '}'
     'generated quantities {'
-    '  real prior_rho;                    //sampled prior'
-    '  vector[2] x_pred[N];               //posterior predictive'
+    '  real prior_rho;                    //prior predictive'
     '  prior_rho = uniform_rng(-1,1);'
-    '  for (n in 1:N)'
-    '    x_pred[n] = multi_normal_rng(mu,E);'
     '}'
 };
 
 %write the model code to a .stan file
-stanfile = [workingDir modelName '.stan'];
-stanfileID = fopen(stanfile,'w');
-fprintf(stanfileID,'%s\n',modelCode{:});
-fclose(stanfileID);
+stanFilePath = writestanfile(modelCode,modelName,workingDir);
 
 %% compile the model
 tic
 fprintf('\ncompiling the model ... ')
-sm = StanModel('file',stanfile);
+sm = StanModel('file',stanFilePath);
 sm.compile();
 fprintf('done!\n')
 fprintf('compiling took %.2f seconds.\n',toc)
 
 %% run the model
 tic
-fprintf('\nrunning the model ... \n\n**********\n\n')
-fit =  sm.sampling('file',  stanfile, ...
-            'model_name',   modelName, ...
-            'sample_file',  modelName, ...
-            'data',         data, ...
-            'chains',       nChains, ...
-            'warmup',       nWarmup, ...
-            'iter',         nIterations, ...
-            'verbose',      true, ...
-            'working_dir',  workingDir);
+fprintf('\nrunning the model ... \n\n************\n\n')
+fit =  sm.sampling('file',          stanFilePath, ...
+                   'model_name',    modelName, ...
+                   'sample_file',   modelName, ...
+                   'verbose',       true, ...
+                   'chains',        nChains, ...
+                   'warmup',        nWarmup, ...
+                   'iter',          nIterations, ...
+                   'data',          dataStruct, ...
+                   'working_dir',   workingDir);
 fit.block();
-stanSummary = fit.print;
-fprintf('\n**********\n\ndone!\n')
+[stanSummaryTxt,stanSummary] = fit.print('sig_figs',5);
+fprintf('\n************\n\ndone!\n')
 fprintf('\nsampling took %.2f seconds.\n',toc)
 
 %% extract from the StanFit object
@@ -155,27 +163,23 @@ instances = getparaminstances([],samples);
 %clean up after MATLABStan
 clearvars fit
 %clean up after Stan
-if cleanUp
-    delete([workingDir '*'])
-    rmdir(workingDir)
-end
+if cleanUp, delete([workingDir '*']); rmdir(workingDir); end
 
-%% diagnostic report & plots
-%calculate convergence diagnostics based on the posterior samples
-% rtable = msl.rhattable(samples);
-rtable = rhattable(samples);
-%print a report about all mcmc diagnostics
-interpretdiagnostics(diagnostics,rtable)
+%% diagnostic reports & plots
+%compute posterior sample-based diagnostics and summary statistics
+posteriorTable = mcmctable(samples);
+%print a report about all MCMC diagnostics
+interpretdiagnostics(diagnostics,posteriorTable)
 
 %trace plots/rank plots
-% tracedensity(samples,{'mu','rho','sigma'})
+tracedensity(samples,{'mu','rho','sigma'},diagnostics)
 rankplots(samples,{'mu','rho','sigma'})
 
-%% inferential plots
+%% other plots
 %plot densities
 multidensity(samples,{'rho','mu','sigma'})
 
-%plot parameter recovery
+%% parameter recovery
 estimatedValues = getsamplestats(samples,trueValues);
 recoveryCounts = ...
     plotrecovery(estimatedValues,trueValues,{'sigma','rho','mu'});
@@ -184,7 +188,7 @@ fprintf('\n%i of %i parameters (%.2f%%) were sucessfully recovered!\n', ...
     recoveryCounts(1),sum(recoveryCounts),proportionRecovered*100)
 
 %% hypothesis test
-plotdensity(samples,'rho','mean','credible95','credible50', ...
+plotdensity(samples,'rho','mean','credible95','credible90','credible50', ...
     trueValues.rho,'legend')
 xlim([-1 1])
 
@@ -197,10 +201,7 @@ fprintf(['this estimate for rho is%s in the 95%% credible interval: ' ...
     '[%.3f %.3f]\n'],inCI,estimatedValues.rho.lowerCI95, ...
     estimatedValues.rho.upperCI95)
 
-% postpredhist(x(:,1),samples.x_pred(:,:,:,1),'x_1')
-% postpredhist(x(:,2),samples.x_pred(:,:,:,2),'x_2')
-
-%% model comparison & other tests
+%% hypothesis test
 compareAt = 0;
 [BF10,BF01] = savagedickey( ...
     samples.prior_rho,samples.rho,compareAt,'support',[-1 1]);

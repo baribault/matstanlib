@@ -4,14 +4,22 @@ function postpredhist(observedData,predictedData,parameter)
 % POSTPREDHIST(OBSERVEDDATA,PREDICTEDDATA)
 %   this function generates a single figure, in which smoothed posterior 
 %   predictive data is overlaid on a histogram of the observed data. 
+%   
+%   both OBSERVEDDATA should be given as a matrix of size <data dimensions>
+%   and PREDICTEDDATA should be given as a matrix of size 
+%   [nIterations nChains <data dimensions>].  
+% 
 % 
 % POSTPREDHIST(...,PARAMETER)
 %   including PARAMETER, a parameter name string, allows for more 
 %   descriptive axis labels, etc. 
 % 
+% 
 % See also PLOTDENSITY, SMOOTHDENSITY
 % 
 % (c) beth baribault 2019 ---                                 > matstanlib 
+
+msl.options
 
 %% parse inputs
 if ismatrix(predictedData)
