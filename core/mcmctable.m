@@ -1,18 +1,23 @@
 function MCMCtable = mcmctable(samples,method)
 %MCMCTABLE collects diagnostic & posterior summary statistics in a table.
 % 
-% MCMCTABLE = MCMCTABLE(SAMPLES)
-%   this function will create a table of statistics, MCMCTABLE.  
+% SUMMARYTABLE = MCMCTABLE(SAMPLES)
+%   this function will create a MCMCTABLE, a table of summary statistics
+%   and convergence diagnostics.   
 %   
 %   for all instances of all parameters found in SAMPLES, selected summary
 %   statistics and diagnostics are computed from the posterior samples,
 %   collected in a table, and returned as SUMMARY. 
-%   the SUMMARY table will contain the following variables:
-%       'parameter'     >>  parameter names (scalar or indexed instance)
+%   
+%   the rows of SUMMARY are the parameter name strings (including bracketed
+%   indices, if there are multiple instances of a parameter). 
+%   the columns of SUMMARY are the following variables:
 %       'mean'          >>  the mean of the posterior samples
 %       'sd'            >>  the standard deviation of the posterior samples
-%       'q50'           >>  the mean of the posterior samples
+%       'median'        >>  the median of the posterior samples
 %       'mad'           >>  median absolute deviation of the posterior samples
+%       'q05'           >>  5% quantile of the posterior samples
+%       'q95'           >>  95% quantile of the posterior samples
 %       'rhat           >>  folded split rhat
 %       'ess_bulk'      >>  bulk effective sample size
 %       'ess_tail'      >>  tail effective sample size
@@ -99,11 +104,11 @@ nParameters = length(parameters);
 %create a list of quantities to compute
 switch method
     case 'current'
-        varNames = {'mean','median','sd','mad','q5','q95', ...  %summary statistics
-                    'rhat','ess_bulk','ess_tail'};              %convergence statistics
+        varNames = {'mean','sd','median','mad','q05','q95', ...  %summary statistics
+                    'rhat','ess_bulk','ess_tail'};               %convergence statistics
     case {'BDA3','BDA2'}
-        varNames = {'mean','median','sd','mad','q5','q95', ...  %summary statistics
-                    'rhat','n_eff'};                            %convergence statistics
+        varNames = {'mean','sd','median','mad','q05','q95', ...  %summary statistics
+                    'rhat','n_eff'};                             %convergence statistics
 end
 nVariables = length(varNames);
 
@@ -137,7 +142,7 @@ for p = 1:length(parameters)
                 value = std(chains(:),0); %normalize by N-1
             case 'mad'
                 value = median(abs( chains(:) - median(chains(:)) ));
-            case 'q5'
+            case 'q05'
                 value = quantile(chains(:),0.05);
             case 'q95'
                 value = quantile(chains(:),0.95);
