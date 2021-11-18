@@ -128,27 +128,32 @@ axJ  = axes('pos',[0.1 0.1 0.58 0.58]);
 axM1 = axes('pos',[0.1 0.75 0.58 0.2]);
 axM2 = axes('pos',[0.75 0.1 0.2 0.58]);
 
-biplotType = 'ksdensity'; %be VERY cautious in changing this
-
-%number of levels for the contour plots
-nLevels = 6;
-
-%colormap for contour layer (lowest to hightest density)
-lowProbColor = getcolors('lightgray','white','blend');
-highProbColor = 'darkblue';
-switch biplotType
-    case 'ksdensity'
-        cmap = makecolormap(lowProbColor,highProbColor,128);
-    case 'contour'
-        cmap = makecolormap(0.925*[1 1 1],highProbColor,nLevels);
-end
-colormap(cmap)
-
 %marker colors for single samples
 sampleColor = getcolors('darkblue');
 sampleAlpha = 0.125;
 divergentColor = getcolors('red');
 divergentAlpha = 0.65;
+
+%colormap for contour layer (lowest to hightest density)
+lowProbColor = getcolors('lightgray','white','blend');
+highProbColor = 'darkblue';
+%number of levels for the contour plots
+nLevels = 6;
+
+%joint density plot type
+biplotType = 'scatter'; %be VERY cautious in changing this
+
+%set colors, given plot type
+switch biplotType
+    case 'ksdensity'
+        cmap = makecolormap(lowProbColor,highProbColor,128);
+        colormap(cmap)
+    case 'contour'
+        cmap = makecolormap(0.925*[1 1 1],highProbColor,nLevels);
+        colormap(cmap)
+    case 'scatter'
+        %
+end
 
 %(1) plot joint density
 axes(axJ); hold on
@@ -209,64 +214,63 @@ end
 
 %-----------------------------------------------------------------------%
 function plotmarginal(ax,chains,color,linePt)
-fcolor = (color + 2*[1 1 1])/3;
-ecolor = color;
-isDiscrete = all(~mod(chains,1));
-[f,x] = smoothdensity(chains);
-if isDiscrete
-    %discrete plot
-    bar(x,f,'facecolor',fcolor,'edgecolor',ecolor,'linewidth',linePt)
-else
-    %continuous plot
-    area(ax,x,f,'facecolor',fcolor,'edgecolor',ecolor,'linewidth',linePt)
-end
-%format, either type of plot
-set(ax,'box','off','xgrid','on')
+    fcolor = (color + 2*[1 1 1])/3;
+    ecolor = color;
+    isDiscrete = all(~mod(chains,1));
+    [f,x] = smoothdensity(chains);
+    if isDiscrete
+        %discrete plot
+        bar(x,f,'facecolor',fcolor,'edgecolor',ecolor,'linewidth',linePt)
+    else
+        %continuous plot
+        area(ax,x,f,'facecolor',fcolor,'edgecolor',ecolor,'linewidth',linePt)
+    end
+    %format, either type of plot
+    set(ax,'box','off','xgrid','on')
 end
 
 %-----------------------------------------------------------------------%
 function matchlimitsandticks(axJ,axM1,axM2)
 %joint Y-axis and marginal #1 X-axis
-%limits
-if ~isequal(axJ.XLim,axM1.XLim)
-    Jlim = axJ.XLim;
-    Mlim = axM1.XLim;
-    newlim = [min(Jlim(1),Mlim(1)) max(Jlim(2),Mlim(2))];
-    axJ.XLim = newlim;
-    axM1.XLim = newlim;
-end
-%ticks
-if ~isequal(axJ.XTick,axM1.XTick)
-    Jtick = axJ.XTick;
-    Mtick = axM1.XTick;
-    if length(Jtick) > length(Mtick)
-        newtick = Jtick;
-    elseif length(Jtick) < length(Mtick)
-        newtick = Mtick;
+    %limits
+    if ~isequal(axJ.XLim,axM1.XLim)
+        Jlim = axJ.XLim;
+        Mlim = axM1.XLim;
+        newlim = [min(Jlim(1),Mlim(1)) max(Jlim(2),Mlim(2))];
+        axJ.XLim = newlim;
+        axM1.XLim = newlim;
     end
-    axJ.XTick = newtick;
-    axM1.XTick = newtick;
-end
-%joint Y-axis and marginal #2 X-axis
-%limits
-if ~isequal(axJ.YLim,axM2.XLim)
-    Jlim = axJ.YLim;
-    Mlim = axM2.XLim;
-    newlim = [min(Jlim(1),Mlim(1)) max(Jlim(2),Mlim(2))];
-    axJ.YLim = newlim;
-    axM2.XLim = newlim;
-end
-%ticks
-if ~isequal(axJ.YTick,axM2.XTick)
-    Jtick = axJ.YTick;
-    Mtick = axM2.XTick;
-    if length(Jtick) > length(Mtick)
-        newtick = Jtick;
-    elseif length(Jtick) < length(Mtick)
-        newtick = Mtick;
+    %ticks
+    if ~isequal(axJ.XTick,axM1.XTick)
+        Jtick = axJ.XTick;
+        Mtick = axM1.XTick;
+        if length(Jtick) > length(Mtick)
+            newtick = Jtick;
+        elseif length(Jtick) < length(Mtick)
+            newtick = Mtick;
+        end
+        axJ.XTick = newtick;
+        axM1.XTick = newtick;
     end
-    axJ.YTick = newtick;
-    axM2.XTick = newtick;
-end
-
+    %joint Y-axis and marginal #2 X-axis
+    %limits
+    if ~isequal(axJ.YLim,axM2.XLim)
+        Jlim = axJ.YLim;
+        Mlim = axM2.XLim;
+        newlim = [min(Jlim(1),Mlim(1)) max(Jlim(2),Mlim(2))];
+        axJ.YLim = newlim;
+        axM2.XLim = newlim;
+    end
+    %ticks
+    if ~isequal(axJ.YTick,axM2.XTick)
+        Jtick = axJ.YTick;
+        Mtick = axM2.XTick;
+        if length(Jtick) > length(Mtick)
+            newtick = Jtick;
+        elseif length(Jtick) < length(Mtick)
+            newtick = Mtick;
+        end
+        axJ.YTick = newtick;
+        axM2.XTick = newtick;
+    end
 end
