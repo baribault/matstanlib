@@ -14,9 +14,9 @@ The library is designed to be used in conjunction with Stan and one of the MATLA
 As such, to use **matstanlib** you first must have a working installation of:
 * MATLAB (R2020a or later) + MATLAB's Statistics and Machine Learning Toolbox (aka "stats toolbox")
 * the command-line version of Stan: [CmdStan](https://mc-stan.org/users/interfaces/cmdstan.html)
-* a MATLAB interface to Stan (such as [MatlabStan](https://github.com/brian-lau/MatlabStan) or [Trinity](https://github.com/joachimvandekerckhove/trinity))
+* a MATLAB interface to Stan (such as [my fork of MatlabStan (recommended)](https://github.com/baribault/MatlabStan) or [Trinity](https://github.com/joachimvandekerckhove/trinity))
 
-The current test & development environment for **matstanlib** is MATLAB R2021a, CmdStan v2.26.1 and v2.27.0, and a fork of MatlabStan.  
+The current test & development environment for **matstanlib** is MATLAB R2021a, CmdStan v2.26.1 and v2.27.0, and [my fork of MatlabStan](https://github.com/baribault/MatlabStan).  
 
 
 ## Installation
