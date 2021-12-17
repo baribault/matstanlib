@@ -33,22 +33,21 @@ clc
 
 %% inputs
 
-modelName = 'example_RL';
+%which model specification to use (for both simulation & fitting)?
+% modelName = 'RL_broken'; %uses normal & uniform priors
+modelName = 'RL_fixed';  %uses beta & gamma priors
 
 %experimental design
 %what is the actual probability of reward for each bandit arm?
 %   (specify this as a vector of reward probabilites where the 
 %    number of elements == number of arms, and the elements sum to 1)
 % RewardProb = [1 0 0]; %deterministic, 3-armed bandit
-RewardProb = [0.8 0.2]; %probabilistic, 2-armed bandit
-
-%which model specification, 'gamma' priors or truncated 'normal' priors?
-priors = 'normal';
+RewardProb = [0.7 0.1 0.2]; %probabilistic, 3-armed bandit
 
 %sampler settings
 nChains     = 4;        %how many chains?
 nWarmup     = 250;      %how many iterations during warmup?
-nIterations = 1000;     %how many iterations after warmup?
+nIterations = 100;     %how many iterations after warmup?
 
 %an absolute path to a (temporary) location for Stan output files:
 workingDir = [pwd filesep 'wdir_' modelName];
@@ -78,41 +77,71 @@ elseif ~isequal(sum(RewardProb),1)
     error('RewardProb must sum to 1.')
 end
 
-%% data
-disp('\nsimulating data ... ')
+%% simulate data
+fprintf('\nsimulating data ... \n')
 
 %%% known features of the experiment
-nSubjects = 20;     %number of subjects
-nProblems = 2;      %number of bandit problems per subject
-nTrials   = 20;     %number of trials per bandit problem
-nData = nSubjects*nProblems*nTrials; %total number of data points
+nSubjects = 30;     %number of subjects
+nProblems = 4;      %number of bandit problems per subject
+nTrials   = 20;     %number of trials per problem
 
 nArms = length(RewardProb); %number of arms in bandit problem
 bestArm = find(RewardProb == max(RewardProb)); %highest probability arm
+nData = nSubjects*nProblems*nTrials; %total number of data points
+
 
 %%% fixed parameters
-Q0 = ones([nArms 1])/nArms;
-epsilon = 0.001;
+% Q0 = ones([nArms 1])/nArms;
+Q0 = zeros([nArms 1]);
+epsilon = 0.005;
 
 %%% true parameter values
-% %... participant level
-% beta = gamrnd(shape,scale,[nSubjects 1]);
-% alpha = betarnd(a,b,[nSubjects 1]);
+switch modelName
+    case 'RL_fixed'
+        %beta
+        mu_beta = 7.5; b1plus = 5; 
+        b1 = b1plus-1; b2 = b1plus/mu_beta;
+        sigma_beta = sqrt(b1plus/b2^2);
+        beta = gamrnd(b1plus,1/b2,[nSubjects 1]);
+        %alpha
+        a1plus = 3; a2plus = 6;         %actually used in the prior
+        a1 = a1plus-1; a2 = a2plus-1;   %inferred 
+        mu_alpha = a1plus/(a1plus+a2plus);
+        sigma_alpha = sqrt(a1plus*a2plus / ((a1plus+a2plus)^2 * (a1plus+a2plus+1)) );
+        alpha = betarnd(1+a1,1+a2,[nSubjects 1]);
+        %phi
+        p1plus = 1.5; p2plus = 10;      %actually used in the prior
+        p1 = p1plus-1; p2 = p2plus-1;   %inferred
+        mu_phi = p1plus/(p1plus+p2plus);
+        sigma_phi = sqrt(p1plus*p2plus / ((p1plus+p2plus)^2 * (p1plus+p2plus+1)) );
+        phi = betarnd(1+p1,1+p2,[nSubjects 1]);
+    case 'RL_broken'
+        %beta
+        mu_beta = 7.5; sigma_beta = 2.5;
+        bCheck = false; 
+        while ~bCheck
+            beta = normrnd(mu_beta,sigma_beta,[nSubjects 1]);
+            if all(beta > 0), bCheck = true; end
+        end
+        %alpha
+        mu_alpha = 0.25; sigma_alpha = 0.15;
+        aCheck = false; 
+        while ~aCheck
+            alpha = normrnd(mu_alpha,sigma_alpha,[nSubjects 1]);
+            if all(alpha > 0 & alpha < 1), aCheck = true; end
+        end
+        %phi
+        mu_phi = 0.075; sigma_phi = 0.025;
+        pCheck = false; 
+        while ~pCheck
+            phi = normrnd(mu_phi,sigma_phi,[nSubjects 1]);
+            if all(phi > 0 & phi < 1), pCheck = true; end
+        end
+    otherwise
+        error('''%s'' is not a recognized modelName input.',modelName)
+end
 
-% beta = linspace(1,20,nSubjects);
-% alpha = ones([1 nSubjects])*0.25;
-
-%%% true parameter values
-N1 = floor(nSubjects/2);
-N2 = nSubjects - N1;
-
-%... participant level
-% beta  = [rand([1 N1])*5 + 5         linspace(5,10,N2)         ];
-% alpha = [linspace(0.05,0.25,N1)     rand([1 N2])*0.20 + 0.05];
-beta  = [rand([1 N1])*4 + 4         linspace(4,8,N2)         ];
-alpha = [linspace(0.025,0.175,N1)     rand([1 N2])*0.150 + 0.025];
-
-%%% simulate observations
+%%% simulate behavior
 %data IDs
 Subject = NaN([nData 1]);
 Problem = NaN([nData 1]);
@@ -132,6 +161,8 @@ for s = 1:nSubjects
         %if first trial, initialize value
         if t == 1
             Q = Q0;
+        else
+            Q = (1-phi(s))*Q + phi(s)*Q0;
         end
         %simulate action
         p_action = (1-epsilon)*softmax(beta(s)*Q) + epsilon/nArms;
@@ -157,7 +188,8 @@ end
 % disp([Subject,Trial,Action,Reward])
 
 %create a structure of true values for observing parameter recovery
-trueValues = collecttruevalues(beta,alpha);
+trueValues = collecttruevalues(beta,alpha,phi, ...
+    mu_beta,sigma_beta,mu_alpha,sigma_alpha,mu_phi,sigma_phi);
 disp(trueValues)
 
 %collect data for Stan
@@ -165,9 +197,11 @@ dataStruct = struct('S',nSubjects,'T',nTrials','A',nArms,'N',nData, ...
     'Subject',Subject,'Trial',Trial,'Action',Action,'Reward',Reward, ...
     'Q0',Q0);
 
-disp('done!\n')
+fprintf('done!\n')
 
-%% plot data
+%% plot the simulated behavior
+fprintf('plotting the simulated behavioral data ...')
+
 msl.options %load plotting options
 
 dumf = figure(999); %dummy figure to protect sizing
@@ -180,28 +214,29 @@ hold on
 %%%%%%%%%% data
 %subject-level learning curves
 nTrialsPerBin = 2;
-nBins = floor(nTrials/nTrialsPerBin);
-binLocs = (1:nBins)*nTrialsPerBin - (nTrialsPerBin-1)/2;
+nTrialBins = floor(nTrials/nTrialsPerBin);
+trialBinCenters = (1:nTrialBins)*nTrialsPerBin - 0.5*(nTrialsPerBin-1);
 
 subColors = makecolormap(0.775*[1 1 1],0.95*[1 1 1],nSubjects);
 subMeans = computeLearningCurve( ...
     table(Trial,Correct,Subject),'Correct','Trial', ...
     {'Subject'},[],nTrialsPerBin);
 for s = 1:nSubjects
-    plot(binLocs,subMeans(:,s)','color',subColors(s,:),'linewidth',1)
+    plot(trialBinCenters,subMeans(:,s)','color',subColors(s,:),'linewidth',1)
 end
 
 %group-level learning curve
 nTrialsPerBin = 1;
-nBins = floor(nTrials/nTrialsPerBin);
-binLabels = cellfun(@num2str,num2cell(nTrialsPerBin:nTrialsPerBin:nTrials),'uni',0);
-binLocs = (1:nBins)*nTrialsPerBin - (nTrialsPerBin-1)/2;
+nTrialBins = floor(nTrials/nTrialsPerBin);
+binLabels = ...
+    cellfun(@num2str,num2cell(nTrialsPerBin:nTrialsPerBin:nTrials),'uni',0);
+trialBinCenters = (1:nTrialBins)*nTrialsPerBin - 0.5*(nTrialsPerBin-1);
 
 [groupMean,groupSEM] = computeLearningCurve( ...
     table(Trial,Correct,Subject),'Correct','Trial', ...
     {},[],nTrialsPerBin);
-errorbar(binLocs,groupMean,groupSEM,'k')
-plot(binLocs,groupMean,'color','k','linewidth',2.5)
+errorbar(trialBinCenters,groupMean,groupSEM,'k')
+plot(trialBinCenters,groupMean,'color','k','linewidth',2.5)
 
 %overlay line at chance
 plot([0 min(nTrials)+1],(1/nArms)*[1 1],':','color','k');
@@ -209,222 +244,21 @@ plot([0 min(nTrials)+1],(1/nArms)*[1 1],':','color','k');
 %format plot
 xlim([0.5 nTrials+0.5])
 set(gca,'xtick',4:4:nTrials)
-ylim([0.25 1.01])
+ylim([0 1.005])
 xlabel('trial')
 ylabel('proportion correct')
 set(gca,'box','on','fontsize',fontSz)
 
-pause(1) %to let figures load
-clearvars f
-
-%% model specification
-
-%visualize hyperpriors
-switch priors
-    %----------------------------------------------------------------%
-    case 'gamma'
-        %using a gamma prior for beta and a beta prior for alpha, and wide
-        %gamma priors for all hyperparameters
-        hyperpriortester([0 25;0 15], ...
-            'gamma', ...            %prior distribution
-            {5,1.5}, ...            %ideal prior
-            'gamma',{1,1/1}, ...   %hyperprior for shape
-            'gamma',{1,1/1})        %hyperprior for rate
-        hyperpriortester([0 1;0 15], ...
-            'beta', ...            %prior distribution
-            {1.1,1.1}, ...         %ideal prior
-            'gamma',{1,1/1}, ...   %hyperprior for shape
-            'gamma',{1,1/1})       %hyperprior for rate
-        pause(0.1)
-    %----------------------------------------------------------------%
-    case 'fixed-gamma'
-        %using a gamma prior for beta and a beta prior for alpha, and wide
-        %gamma priors for all hyperparameters
-        hyperpriortester([0 25;0 15], ...
-            'gamma', ...            %prior distribution
-            {5,1.5}, ...            %ideal prior
-            'gamma',{10,1/2}, ...   %hyperprior for shape
-            'gamma',{3,1/2}, ...    %hyperprior for rate
-            {@(x) x+1, @(x) x})     %functions applied to each hyperparameter
-        hyperpriortester([0 1;0 15], ...
-            'beta', ...            %prior distribution
-            {1.1,1.1}, ...         %ideal prior
-            'gamma',{1,1/1}, ...   %hyperprior for shape
-            'gamma',{1,1/1}, ...   %hyperprior for rate
-            {@(x) x+1, @(x) x+1})  %functions applied to each hyperparameter
-        pause(0.1)
-    %----------------------------------------------------------------%
-    case 'normal'
-end
-
-
-%first bit of the model code
-modelCode = {
-    'data { '
-    '  int<lower=1> S;                      //number of subjects'
-    '  int<lower=1> T;                      //number of trials per subject'
-    '  int<lower=1> A;                      //number of bandit arms'
-    '  int<lower=1> N;                      //number of data points'
-    '  int<lower=1,upper=S> Subject[N];     //subject number'
-    '  int<lower=1,upper=T> Trial[N];       //trial number'
-    '  int<lower=1,upper=A> Action[N];      //action selected'
-    '  int<lower=0,upper=1> Reward[N];      //reinforcement given'
-    '  vector[A] Q0;                        //inital value of actions'
-    '}'
-    'transformed data { '
-    '  //fixed parameters'
-    '  real epsilon = 0.001;'
-    '}'
-    };
-
-
-%middle bit of the model code
-switch priors
-    %----------------------------------------------------------------%
-    case 'gamma'
-        %using a gamma prior for beta, a beta prior for alpha, 
-        %and gamma(1,1) for all hyperpriors
-        modelCode = [modelCode; {
-            'parameters { '
-            '  //group-level parameters'
-            '  real<lower=0> shape;'
-            '  real<lower=0> rate;'
-            '  real<lower=0> a;'
-            '  real<lower=0> b;'
-            '  '
-            '  //subject-level parameters'
-            '  real<lower=0> beta[S];               //inverse temperature'
-            '  real<lower=0,upper=1> alpha[S];      //learning rate'
-            '}' 
-            'transformed parameters { '
-            '  //derived parameters'
-            '  real mu_beta = shape/rate;'
-            '  real sigma_beta = sqrt(shape / (rate^2));'
-            '  real mu_alpha = a/(a + b);'
-            '}'
-            'model { '
-            '  //local variables'
-            '  vector[A] Q;'
-            '  vector[A] pi;'
-            '  real delta;'
-            '  '
-            '  //group-level priors'
-            '  shape ~ gamma(1,1);'
-            '  rate ~ gamma(1,1);'
-            '  a ~ gamma(1,1);'
-            '  b ~ gamma(1,1);'
-            '  '
-            '  //individual-level priors'
-            '  for (s in 1:S) { '
-            '    beta[s] ~ gamma(shape,rate);'
-            '    alpha[s] ~ beta(a,b);'
-            '  }'
-            }];
-        
-    %----------------------------------------------------------------%
-    case 'fixed-gamma'
-        %using a gamma prior for beta, a beta prior for alpha, 
-        %and constrained, informed hyperpriors
-        modelCode = [modelCode; {
-            'parameters { '
-            '  //group-level parameters'
-            '  real<lower=0> shape;'
-            '  real<lower=0> rate;'
-            '  real<lower=0> a;'
-            '  real<lower=0> b;'
-            '  '
-            '  //subject-level parameters'
-            '  real<lower=0> beta[S];               //inverse temperature'
-            '  real<lower=0,upper=1> alpha[S];      //learning rate'
-            '}' 
-            'transformed parameters { '
-            '  //derived parameters'
-            '  real mu_beta = (shape+1)/rate;'
-            '  real sigma_beta = sqrt((shape+1) / (rate^2));'
-            '  real mu_alpha = (a+1)/(a+1 + b+1);'
-            '  real sigma_alpha = sqrt((a+1)*(b+1)/( ((a+1 + b+1)^2)*(a+1 + b+1 + 1) ));'
-            '}'
-            'model { '
-            '  //local variables'
-            '  vector[A] Q;'
-            '  vector[A] pi;'
-            '  real delta;'
-            '  '
-            '  //group-level priors'
-            '  shape ~ gamma(10,2);'
-            '  rate ~ gamma(3,2);'
-            '  a ~ gamma(1,1);'
-            '  b ~ gamma(1,1);'
-            '  '
-            '  //individual-level priors'
-            '  for (s in 1:S) { '
-            '    beta[s] ~ gamma(1+shape,rate);'
-            '    alpha[s] ~ beta(1+a,1+b);'
-            '  }'
-            }];
-        
-    %----------------------------------------------------------------%
-    case 'normal'
-        %using truncated normal priors for alpha & beta, 
-        %and uniform priors for the hyperparameters
-        modelCode = [modelCode; {
-            'parameters { '
-            '  //group-level parameters'
-            '  real<lower=0> mu_beta;'
-            '  real<lower=0> sigma_beta;'
-            '  real<lower=0,upper=1> mu_alpha;'
-            '  real<lower=0,upper=0.5> sigma_alpha;'
-            '  '
-            '  //subject-level parameters'
-            '  real<lower=0> beta[S];               //inverse temperature'
-            '  real<lower=0,upper=1> alpha[S];      //learning rate'
-            '}'
-            'model { '
-            '  //local variables'
-            '  vector[A] Q;'
-            '  vector[A] pi;'
-            '  real delta;'
-            '  '
-            '  //group-level priors'
-            '  mu_beta ~ uniform(0,40);'
-            '  sigma_beta ~ uniform(0,10);'
-            '  mu_alpha ~ uniform(0,1);'
-            '  sigma_alpha ~ uniform(0,0.5);'
-            '  '
-            '  //individual-level priors'
-            '  for (s in 1:S) { '
-            '    beta[s] ~ normal(mu_beta,sigma_beta);'
-            '    alpha[s] ~ normal(mu_alpha,sigma_alpha);'
-            '  }'
-            }];
-end
-
-%final bit of the model code
-modelCode = [modelCode; { 
-    '  '
-    '  //likelihood'
-    '  for (n in 1:N) { '
-    '    //initialize value'
-    '    if (Trial[n]==1) { '
-    '      Q = Q0;'
-    '    }'
-    '    '
-    '    //choice behavior'
-    '    pi = (1-epsilon)*softmax(beta[Subject[n]]*Q) + epsilon/A;'
-    '    Action[n] ~ categorical(pi);'
-    '    '
-    '    //reward'
-    '    delta = Reward[n] - Q[Action[n]];'
-    '    Q[Action[n]] = Q[Action[n]] + alpha[Subject[n]]*delta;'
-    '  }'
-    '  '
-    '}'
-    }];
-
-%write the model code to a .stan file
-stanFilePath = writestanfile(modelCode,modelName,workingDir);
+pause(0.1) %to let figures load
+fprintf('done!\n')
 
 %% compile the model
+
+%copy the .stan file containing the model code to the working directory
+stanFile = [modelName '.stan'];
+stanFilePath = [workingDir stanFile];
+copyfile(which([modelName '.stan']),workingDir)
+
 tic
 fprintf('\ncompiling the model ... ')
 sm = StanModel('file',stanFilePath);
@@ -452,17 +286,16 @@ fprintf('\nsampling took %.2f seconds.\n',toc)
 %% extract from the StanFit object
 [samples,diagnostics] = extractsamples('MATLABStan',fit);
 
-%extract parameter names
-parameters = fieldnames(samples);
-instances = getparaminstances([],samples);
-hyperparameters = setdiff(parameters,{'alpha','beta'});
-
 %clean up after MATLABStan
 clearvars fit
 %clean up after Stan
 if cleanUp, delete([workingDir '*']); rmdir(workingDir); end
 
 %% diagnostic reports & plots
+%extract parameter names
+parameters = {'beta','alpha','phi'};
+hyperparameters = getparaminstances('*_*',samples);
+
 %compute posterior sample-based diagnostics and summary statistics
 posteriorTable = mcmctable(samples);
 %print a report about all MCMC diagnostics
@@ -471,32 +304,33 @@ interpretdiagnostics(diagnostics,posteriorTable)
 % %trace plots/rank plots
 % tracedensity(samples,hyperparameters,diagnostics)
 % rankplots(samples,hyperparameters)
-% 
-% multidensity(samples,hyperparameters,diagnostics)
-% 
-% parcoordivergent(samples,diagnostics,{'mu_alpha','sigma_alpha', ...
-%     'alpha[1]','alpha[2]','alpha[3]'})
-% 
-% if ismember('shape',hyperparameters)
-%     jointdensity(samples,'shape','rate',diagnostics)
-% else
-%     jointdensity(samples,'mu_alpha','sigma_alpha',diagnostics)
-% end
+
+multidensity(samples,{'*_b*','*_p*'},diagnostics,{'divergent','treedepth','energy'})
+
+parallelsamples(samples,diagnostics, ...
+    {'mu_alpha','sigma_alpha','mu_phi','sigma_phi','alpha[1]','phi[1]'})
+parallelsamples(samples,diagnostics, ...
+    {'mu_beta','sigma_beta','mu_phi','sigma_phi','mu_alpha','sigma_alpha'},true)
 
 %% get parameter estimates & other statistics
 
-estimatedValues = getsamplestats(samples,trueValues);
-
 %plot recovery
 recoveryCounts = [0 0];
-recoveryCounts = recoveryCounts + plotrecovery(estimatedValues,trueValues,'alpha');
-recoveryCounts = recoveryCounts + plotrecovery(estimatedValues,trueValues,'beta');
+recoveryCounts = recoveryCounts + ...
+    plotrecovery(samples,trueValues,'beta', ...
+    'addinterval',true);
+recoveryCounts = recoveryCounts + ...
+    plotrecovery(samples,trueValues,'alpha', ...
+    'addinterval',true);
+recoveryCounts = recoveryCounts + ...
+    plotrecovery(samples,trueValues,'phi', ...
+    'addinterval',true);
+recoveryCounts = recoveryCounts + ...
+    plotrecovery(samples,trueValues,hyperparameters);
 %report recovery
 proportionRecovered = recoveryCounts(1)/sum(recoveryCounts);
 fprintf('\n%i of %i parameters (%.2f%%) were sucessfully recovered!\n', ...
     recoveryCounts(1),sum(recoveryCounts),proportionRecovered*100)
-
-multidensity(samples,hyperparameters,diagnostics)
 
 %% visualize group-level means
 % % plotdensity(samples,'mu_alpha','credible','mean','legend',mean(trueValues.alpha))
@@ -508,11 +342,20 @@ multidensity(samples,hyperparameters,diagnostics)
 % % ylabel('')
 
 %% visualize individual differences
-% % plotintervals(samples,'alpha', ...
-% %     'truevalues',trueValues,'truecolor',getcolors('red'))
-% % horzdensity(samples,'alpha', ...
-% %     'truevalues',trueValues,'truecolor',getcolors('red'))
-% % plotintervals(samples,'beta', ...
-% % 	'truevalues',trueValues,'truecolor',getcolors('red'))
-% % horzdensity(samples,'beta', ...
-% %     'truevalues',trueValues,'truecolor',getcolors('red'))
+% plotintervals(samples,'beta', ...
+% 	'truevalues',trueValues,'truecolor',getcolors('blue'))
+% xlim([0 20])
+% % % horzdensity(samples,'beta', ...
+% % %     'truevalues',trueValues,'truecolor',getcolors('blue'))
+% 
+% plotintervals(samples,'alpha', ...
+%     'truevalues',trueValues,'truecolor',getcolors('blue'))
+% xlim([0 1])
+% % % horzdensity(samples,'alpha', ...
+% % %     'truevalues',trueValues,'truecolor',getcolors('blue'))
+% 
+% plotintervals(samples,'phi', ...
+% 	'truevalues',trueValues,'truecolor',getcolors('blue'))
+% xlim([0 1])
+% % % horzdensity(samples,'phi', ...
+% % %     'truevalues',trueValues,'truecolor',getcolors('blue'))

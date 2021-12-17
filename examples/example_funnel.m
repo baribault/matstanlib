@@ -48,7 +48,7 @@ modelName = 'example_funnel';
 %sampler settings
 nChains     = 4;        %how many chains?
 nWarmup     = 500;      %how many iterations during warmup?
-nIterations = 1500;     %how many iterations after warmup?
+nIterations = 1000;     %how many iterations after warmup?
 
 %an absolute path to a (temporary) location for Stan output files:
 workingDir = [pwd filesep 'wdir_' modelName];
@@ -206,6 +206,7 @@ for m = 1:2
         if cleanUp, delete([workingDir '*']); end
 
         %%% diagnostics %%%
+        if all(diagnostics_c.divergent__(:)==0), error; end %%%%%%%%%%%
         %compute posterior sample-based diagnostics and summary statistics
         posteriorTable_c = mcmctable(samples_c);
         disp(posteriorTable_c)
@@ -236,6 +237,10 @@ plotdivergences(diagnostics_c)
 %    (where mu & sigma are both small)
 jointdensity(samples_c,'mu','sigma',diagnostics_c)
 
+tracedensity(samples_c,'sigma',diagnostics_c)
+plotess(samples_c,diagnostics_c,'sigma','plottypes',{'evolution','quantile','local'})
+plotenergy(diagnostics_c)
+
 %we can resolve this by using a non-centered parameterization instead, 
 %which does not lead to divergences ...
 plotdivergences(diagnostics_nc)
@@ -243,3 +248,6 @@ plotdivergences(diagnostics_nc)
 %     the funnel, and so can fully explore the posterior
 jointdensity(samples_nc,'mu','sigma',diagnostics_nc)
 
+tracedensity(samples_nc,'sigma',diagnostics_nc)
+plotess(samples_nc,diagnostics_nc,'sigma','plottypes',{'evolution','quantile','local'})
+plotenergy(diagnostics_nc)

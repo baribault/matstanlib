@@ -139,6 +139,7 @@ posteriorTable = mcmctable(samples);
 interpretdiagnostics(diagnostics,posteriorTable)
 
 %trace plots/rank plots
+tracedensity(samples,{'mu','tau'},diagnostics)
 rankplots(samples,{'mu','tau'})
 
 %% 
