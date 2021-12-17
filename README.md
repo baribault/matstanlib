@@ -1,9 +1,9 @@
 # matstanlib
 **matstanlib** is a MATLAB library for visualization, processing, and analysis of output from Bayesian models fit with [Stan](https://mc-stan.org/).  
 
-**matstanlib** places a heavy emphasis on diagnostic checks & analyses.  the library includes a full set of automated diagnostic checks, consistent with current best practice for Bayesian modeling, as well as a wide variety of diagnostic plots.  
+**matstanlib** places a heavy emphasis on diagnostic analysis of model output.  the library includes a full set of automated computational checks, consistent with current best practice for Bayesian modeling, as well as a wide variety of diagnostic plots.  
 
-**matstanlib** also support for the visual exploration of model results.  the libarary includes many functions to plot posterior densities and estimates, in addition to analysis functions for parameter estimation and model comparison.  
+**matstanlib** also supports the use of model output as the basis for inference.  the libarary includes many functions to plot posterior densities and estimates, in addition to analysis functions for parameter estimation and model comparison.  
 
 **matstanlib** is being actively developed and maintained.
 
@@ -27,9 +27,7 @@ addpath(genpath('/path/to/matstanlib'))
 To ensure **matstanlib** is always available, add the above line (with a real path, of course) to your `startup.m` file.
 
 ## Documentation
-The [**matstanlib** wiki](https://github.com/baribault/matstanlib/wiki) offers guidance on how to use **matstanlib**, gives an overview of all **matstanlib** functions, and more.  (The wiki is currently a work in progress!) 
-
-**matstanlib** is also heavily internally documented.  To see the most recent & complete documentation for a given function, run `help` followed by the name of a function at the MATLAB command line. For example:
+**matstanlib** is heavily internally documented.  To see the most recent & complete documentation for a given function, run `help` followed by the name of a function at the MATLAB command line. For example:
 ```
 help extractsamples
 ```
@@ -40,12 +38,14 @@ help tracedensity
 help computebfmi
 ```
 
+The [**matstanlib** wiki](https://github.com/baribault/matstanlib/wiki) offers guidance on how to use **matstanlib**, gives an overview of all **matstanlib** functions, and more.  (The wiki is currently a work in progress!) 
+
 ## Getting started
-To see how **matstanlib** functions support a Bayesian workflow in MATLAB, try running one of the scripts in the `example` folder.  The `example_correlation` script is a great place to start! 
+If you are starting from scratch, try running one of the scripts in the `example` folder to see how **matstanlib** functions support a Bayesian workflow in MATLAB.  The `example_correlation.m` script is an ideal place to start! 
 
 If you already have Stan model output in the workspace, start with the functions in the `core` folder:
 1. `extractsamples.m` converts your output to a more standard format that is compatibile with all **matstanlib** functions
 2. `mcmctable.m` uses the posterior samples to compute summary statistics and convergence diagnostics for each parameter
-3. `interpretdiagnostics.m` prints a full diagnostic report and warns when any convergence checks fail
+3. `interpretdiagnostics.m` prints a full diagnostic report and warns when any computational checks fail
 
-To start writing your own Bayesian modeling scripts with Stan & **matstanlib**, check out `skeleton.m`.  
+To start writing your own Bayesian modeling scripts with Stan & **matstanlib**, check out :skull: `skeleton.m`.
