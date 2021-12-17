@@ -119,14 +119,14 @@ else
 end
 
 %printReport & printWarnings
-if nargin < 5
+if nargin < 5 || isempty(printReport)
     printReport = true;
 else
     if ~ismember(printReport,[0 1])
         error('printReport must be convertible to logical value.')
     end
 end
-if nargin < 6
+if nargin < 6 || isempty(printWarnings)
     printWarnings = true;
 else
     if ~ismember(printWarnings,[0 1])
