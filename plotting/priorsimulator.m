@@ -1,5 +1,5 @@
-function hyperpriortester(xRange,priorForm,referenceParams,varargin)
-% HYPERPRIORTESTER helps visualize hyperpriors' effects on a prior.
+function priorsimulator(xRange,prior,varargin)
+% PRIORSIMULATOR helps visualize hyperpriors' effects on a prior.
 % 
 % *** NOTE: MAKE SURE TO USE MATLAB'S DISTRIBUTION PARAMETERIZATIONS ***
 % ***       WHEN CALLING THIS FUNCTION, THEN (if neccessary) CONVERT ***
@@ -7,9 +7,8 @@ function hyperpriortester(xRange,priorForm,referenceParams,varargin)
 % 
 % *** FOR SOME DISTRIBUTIONS, STAN & MATLAB USE DIFFERENT PARAMETERIZATIONS!
 % 
-% this function will test the effect of different hyperprior distributions
-% on possible parameter values at the prior level, by visualizing how
-% different hyperpriors distributions combine to constrain the prior. 
+% this function visualizes how different hyperprior distributions combine
+% to constrain the prior (and therefore, possible parameter values). 
 % 
 % specifically, this function will generate a figure your candidate
 % hyperprior distribution (with the given parameterization), simulate their
@@ -25,9 +24,7 @@ function hyperpriortester(xRange,priorForm,referenceParams,varargin)
 % ****          FOR SOME DISTRIBUTIONS!!! (e.g., Gamma)          ***
 % 
 % 
-% HYPERPRIORTESTER(XRANGE,PRIORFORM,REFERENCEPARAMS, ...
-%                  HYPERPRIORFORM,HYPERPRIORPARMS, ...
-%                  [HYPERPRIORFORM2,HYPERPRIORPARMS2] [, ...])
+% PRIORSIMULATOR(XRANGE,PRIOR,HYPERPRIOR,[HYPERPRIORFORM2, ...])
 %   XRANGE range of parameter values to consider (and plot!). 
 %   if XRANGE is a two-element vector, then the same values will be used as
 %   the domain to visualize both the prior and the hyperprior. 
@@ -35,8 +32,8 @@ function hyperpriortester(xRange,priorForm,referenceParams,varargin)
 %   domain for the priors, and the second row is the domain for the
 %   hyperpriors.  
 %   
-%   PRIORFORM is a string indicates what form of the prior you are using is (i.e., the
-%   distribution name).   
+%   PRIORFORM is a string representing the form of the prior distribution
+%   (i.e., the distribution name).   
 %   
 %   REFERENCEPARAMS contains parameter values which, in conjuction with
 %   PRIORFORM, define a specific distribution that would be useful to
@@ -69,45 +66,30 @@ function hyperpriortester(xRange,priorForm,referenceParams,varargin)
 % 
 % there are also a few optional inputs, which may be given in any order:
 % 
-% HYPERPRIORTESTER(...,'clf')
+% PRIORSIMULATOR(...,'clf')
 %   plots in the current figure (after wiping it), rather than creating a
 %   new figure. 
 % 
-% HYPERPRIORTESTER(...,N)
+% PRIORSIMULATOR(...,N)
 %   bumps up the number of points in domain AND the number of simulations.
 %   the default is 250.
 % 
-% HYPERPRIORTESTER(...,f)
+% PRIORSIMULATOR(...,f)
 %   f is a cell type vector of function handles of functions to apply to
-%   each hyperparameter (that has been randomly drawn from the hyperpriors)
-%   before the hyperparameter is used for prior simulation.   
-%   (these functions can be used to, for example, shift and scale the
-%   hyperpriors.  the only requirement is that the functions only have ONE
-%   input: the parameter value!).
-%   NOTE: these functions are not applied to the plotting of the
-%   hyperpriors in the first panel.
+%   each hyperparameter before using it for simulation.  
+%   (if there is no function to apply
+%   these functions can add a minimum value, scale, etc.  the only
+%   requirement is that the functions only have ONE input (the parameter
+%   value!).
+%   NOTE: these functions are only used to get the expected resultant
+%   prior!
 % 
 % 
 % Example:
-%   the following hyperpriors induce a distribtution over priors that
-%   grossly overweights horseshoe-shaped priors (vs. the ideal prior). 
-%   > hyperpriortester([0 1;0 10], ...       %prior & hyperprior domains
-%                       'beta',{2,2}, ...    %an ideal prior
-%                       'gamma',{1,1/1}, ... %hyperprior for A
-%                       'gamma',{1,1/1})     %hyperprior for B
-%   many of the priors place such extreme weight on 0 and 1 that adjusting
-%   the y-axis limit is likely necessary to see what's going on: 
-%   > ylim([0 8])
-% 
-%   setting a lower bound of 1 on both hyperparameters allows for a more
-%   reasonable distribution of priors (that is, on average, closer to the
-%   ideal prior, while still permitting a wide selection).  
-%   > f = {@(x) x + 1; @(x) x + 1}; %add 1 to each hyperparameter before use
-%   > hyperpriortester([0 1;0 10], ...       %prior & hyperprior domains
-%                       'beta',{2,2}, ...    %an ideal prior
-%                       'gamma',{1,1/1}, ... %hyperprior for A
-%                       'gamma',{1,1/1}, ... %hyperprior for B
-%                       f) %functions to be applied to the hyperparameters 
+%   > f = {@(x) x + 1; @(x) x}; %adds 1 to shape parameter
+%   > PRIORSIMULATOR([0 10],'gamma',{5,1/1}, ... %reference prior
+%                             'gamma',{5,1/2}, ... %hyperprior for shape
+%                             'gamma',{2,1/1},f)   %hyperprior for rate/scale
 % 
 % 
 % See also PDF
@@ -117,7 +99,7 @@ function hyperpriortester(xRange,priorForm,referenceParams,varargin)
 msl.options
 
 %% parse inputs
-nNamedInp = 3;
+nNamedInp = 2;
 nVarargin = length(varargin);
 if nargin < nNamedInp || nVarargin < 2
     error('too few inputs: at least four inputs total are required.')
@@ -134,35 +116,32 @@ else
 end
 
 %prior form
-if ~ischar(priorForm)
-    error('priorForm must be a string.')
-end
-
-%prior params
-includeRef = true;
-if isempty(referenceParams)
-    includeRef = false;
-elseif ~iscell(referenceParams) || ~isvector(referenceParams)
-    error('REFERENCEPARAMS must be a cell type vector.')
-elseif ~all(cellfun(@isnumeric,referenceParams) & cellfun(@isscalar,referenceParams))
-    error('REFERENCEPARAMS must be a cell type vector of scalar numeric values.')
-end
-
-%prior form AGAIN
-if ~ischar(priorForm)
-    error('priorForm must be a string.')
-else
-    if includeRef
-      try
-        test = random(priorForm,referenceParams{:});
-      catch
-        error(['priorForm must be a valid distribution string.  ' ...
-            'type "help pdf" for a list.'])
-      end
-      if isnan(test)
-        error('invalid parameters given for prior form %s.',priorForm)
-      end
+includeReferencePrior = false;
+if isempty(prior)
+    error('prior input cannot be empty.')
+elseif ischar(prior)
+    %form only
+    priorForm = prior;
+elseif iscell(prior)
+    %form ...
+    if ischar(prior{1})
+        priorForm = prior{1};
+        prior(1) = []; %remove
+    else
+        error(['if prior is a cell, the first entry must be ' ...
+            'a string representing the prior form.'])
     end
+    % ... and reference parameters
+    if all(cellfun(@isnumeric,prior))
+        referenceParams = prior;
+        includeReferencePrior = true;
+    elseif numel(prior)==3
+        error(['if prior is a cell, the all entries after the first' ...
+            'must be numeric values representing parameters ' ...
+            'for a reference prior distribution.'])
+    end
+else
+    error('prior input can only be a string or cell type.')
 end
 
 %% parse optional inputs
@@ -173,6 +152,8 @@ hyperparamParams = {};
 
 %defaults
 noNewFig = false;
+parameterName = '';
+NX = 1000; %cannot be changed
 NS = 250;
 
 skipNext = false;
@@ -206,9 +187,11 @@ for v = 1:nVarargin
                     'hyperparameterParams inputs must be cell matrices ' ...
                     'of scalar numeric values.'],nNamedInp+v+1)
             end
+        elseif ischar(varargin{v})
+            parameterName = varargin{v};
         elseif isnumeric(varargin{v}) && isscalar(varargin{v})
             if mod(varargin{v},1) == 0
-                NS = varargin{v};
+                NX = varargin{v};
             else
                 error('input #%i not recognized.',nNamedInp+v)
             end
@@ -226,8 +209,6 @@ for v = 1:nVarargin
     end
 end
 
-
-
 nHyperparams = length(hyperparamForms);
 %if not enough HP ranges given, missing ones are a repeat of last given.
 hpRange = repmat(xRange(end,:),[nHyperparams 1]);
@@ -237,20 +218,11 @@ end
 xRange = xRange(1,:);
 
 %do any distributions have more than 4 parameters???
-% hyperparamColors = makecolormap('darkblue','lightblue',nHyperparams);
-% jointColor = mean(hyperparamColors,1);
-hyperparamColors = getcolors('plum','indigo','blue','green');
-% hyperparamColors = getcolors('lightplum','lightindigo','lightblue','lightgreen');
+hyperparamColors = getcolors('blue','green','yellow','mandarin');
 hyperparamColors = hyperparamColors(1:nHyperparams,:);
-jointColor = mean(hyperparamColors,1);
-jointColor = mean([jointColor; jointColor; 0.8*[1 1 1]; 1 1 1],1);
-% jointColor = getcolors('darkblue');
+jointColor = getcolors('darkblue');
 priorColor = getcolors('black');
 simPriorColor = 0.55*[1 1 1];
-
-tfsm = 1.05;   %TitleFontSizeMultiplier
-lfsm = 1;   %LabelFontSizeMultiplier
-NX = 1000;  %points over domain
 
 %standardize names
 priorForm = internal.stats.getDistributionName(priorForm);
@@ -269,6 +241,41 @@ else
     functions = cell([nHyperparams 1]);
 end
 
+%% test prior form
+maxNhypers = 5;
+isNhypers = true([maxNhypers 1]);
+for Nhypers = 1:maxNhypers
+    try
+%       test = random(priorForm,referenceParams{:});
+        testParams = num2cell(NaN([Nhypers 1]));
+        test = random(priorForm,testParams{:});
+    catch
+        isNhypers(Nhypers) = false;
+    end
+end
+
+isNhypers
+nHyperparams
+
+if all(~isNhypers)
+    %couldn't pass test (for any number of hyperparameters)
+    error(['priorForm is not a valid distribution string.  ' ...
+        'type "help pdf" for a list of valid strings.'])
+elseif isNhypers(nHyperparams)
+    %could pass test, but not for the given number of hyperparameters
+    error('%i hyperparameters is not correct for a %s prior distribution.', ...
+        nHyperparameters,priorForm)
+end
+
+%... including the reference prior parameters
+if includeReferencePrior
+    try
+      test = random(priorForm,referenceParams{:});
+    catch
+        error('invalid parameters given for prior form %s.',priorForm)
+    end
+end
+
 %% set up for prior testing plot
 if noNewFig,    clf; f = gcf;
 else,           f = figure('color',[1 1 1]);
@@ -276,61 +283,37 @@ end
 
 if ~strcmp(f.WindowStyle,'docked')
     fpos = f.Position;
-    f.Position = [fpos([1 2]) [600 625]*figScaling];
+    if nHyperparams == 1
+        f.Position = [fpos([1 2]) [900 250]*figScaling];
+    else
+        f.Position = [fpos([1 2]) [750 520]*figScaling];
+    end
+end
+%subplots, ugh
+if nHyperparams == 1
+    sp1 = 1; sp2 = 3; plt3 = [2 3]; loc = 'eastoutside';
+else
+    sp1 = 2; sp2 = 2; plt3 = [3 4]; loc = 'eastoutside';
 end
 
-nRows = 5; nCols = 2;
-titleStr = tiledlayout(nRows,nCols,'tilespacing','normal','padding','compact');
-
-%% hyperprior distributions
-nexttile(1,[2 1]); hold on
-if nHyperparams==1, tileTitle = title('hyperprior');
-else,               tileTitle = title('hyperpriors'); end
+%%% hyperpriors, curves
+subplot(sp1,sp2,1); hold on
+title('hyperpriors')
 hpLabels = cell([1 nHyperparams]);
 for hp = 1:nHyperparams
     xx = linspace(hpRange(hp,1),hpRange(hp,2),NX);
-    hpHandle = plot(xx, ...
-        pdf(hyperparamForms{hp},xx,hyperparamParams{hp}{:}), ...
-        'linewidth',linePt*1.5,'color',hyperparamColors(hp,:));
-    hpHandle.Color = [hpHandle.Color 0.75];
+    plot(xx,pdf(hyperparamForms{hp},xx,hyperparamParams{hp}{:}), ...
+        'linewidth',linePt,'color',hyperparamColors(hp,:))
     g = repmat('%g,',[1 length(hyperparamParams{hp})]);
     hpLabels{hp} = sprintf(['[%i]  %s(' g(1:end-1) ')'], ...
         hp,hyperparamForms{hp},hyperparamParams{hp}{:});
 end
-%format
 legend(hpLabels,'location','best','box','off')
 set(gca,'fontsize',fontSz)
-set(gca,'TitleFontSizeMultiplier',tfsm,'LabelFontSizeMultiplier',lfsm)
-% tileTitle.HorizontalAlignment = 'left';
-% tileTitle.Position = [0 tileTitle.Position(2:end)];
 
-%% hyperparameters (sampled from hyperpriors)
-%sample hyperparameter values from the hyperpriors as specified ...
-hyperparamValues = NaN([NS nHyperparams]);
-for hp = 1:nHyperparams
-    if isempty(functions{hp})
-        hyperparamValues(:,hp) = ...
-            random(hyperparamForms{hp},hyperparamParams{hp}{:},[NS 1]);
-    else
-        f = functions{hp};
-        hyperparamValues(:,hp) = ...
-            f(random(hyperparamForms{hp},hyperparamParams{hp}{:},[NS 1]));
-    end
-end
-%... and plot their (univariate or bivariate) distribution
-switch nHyperparams
-  case 1
-    %univariate
-    nexttile(2,[2 1]); hold on
-    tileTitle = title('hyperparameter draws');
-    histogram(hyperparamValues, ...
-        'facecolor',hyperparamColors(1,:), ...
-        'facealpha',0.35,'edgecolor','none')
-    xlabel('[1]','fontweight','normal')
-  case 2
-    %bivariate
-    nexttile(2,[2 1]); hold on
-    tileTitle = title('hyperparameter draws');
+%%% hyperpriors, scatter
+if nHyperparams > 1
+    subplot(2,2,2); hold on
     %temporarily mess with plot
     axunits = get(gca,'units'); %original settings
     set(gca,'units','points');  %temporarily change settings
@@ -339,54 +322,49 @@ switch nHyperparams
     %marker size
     mPtSize = (axpos(3)*0.025)^2; %marker width will be exactly 2.5% of 
                                   %the x-axis width.
-    scatter(hyperparamValues(:,1),hyperparamValues(:,2), ...
+    scatter( ...
+        random(hyperparamForms{1},hyperparamParams{1}{:},[NX 1]), ...
+        random(hyperparamForms{2},hyperparamParams{2}{:},[NX 1]), ...
         mPtSize,'markerfacecolor',jointColor, ...
         'markerfacealpha',0.35,'markeredgecolor','none')
-    %format
-    if isempty(functions{1}),   xLabelStr = '[1]';
-    else,                       xLabelStr = 'function of [1]';
-    end
-    xlabel(xLabelStr,'fontweight','normal')
-    if isempty(functions{1}),   yLabelStr = '[2]';
-    else,                       yLabelStr = 'function of [2]';
-    end
-    ylabel(yLabelStr,'fontweight','normal')
+    xlabel('[1]','fontweight','bold')
+    ylabel('[2]','fontweight','bold')
     set(gca,'fontsize',fontSz,'box','on')
-  otherwise
-    %too many to plot.
-end
-if ismember(nHyperparams,[1 2])
-    %format
-    set(gca,'fontsize',fontSz,'box','on')
-    set(gca,'TitleFontSizeMultiplier',tfsm,'LabelFontSizeMultiplier',lfsm)
-%     tileTitle.HorizontalAlignment = 'left';
-%     tileTitle.Position = [0 tileTitle.Position(2:end)];
 end
 
-%% simulated prior distributions (simulated using sampled hyperparameters)
-nexttile(2*nCols+1,[nRows-2 nCols]); hold on
-tileTitle = title('simulated prior distributions');
+%%% prior
+subplot(sp1,sp2,plt3); hold on
+t = 'prior'; if ~isempty(parameterName), t = [t '(' parameterName ')']; end
+title(t,'interpreter','none')
 xx = linspace(xRange(1),xRange(2),NX);
 h = gobjects([2 1]);
 
-%N simulated priors
-simPriorProb = zeros([NS length(xx)]);
+%simulated expected prior ...
+simprob = zeros([NS length(xx)]);
 for n = 1:NS
-    %grab the nth set of hyperparameters and simulate a prior
-    simHyperparam = num2cell(hyperparamValues(n,:));
-    simPriorProb(n,:) = pdf(priorForm,xx,simHyperparam{:});
-    %... and plot this simulation
-    h(1) = plot(xx,simPriorProb(n,:), ...
+    fromHyperprior = cell([nHyperparams 1]);
+    for hp = 1:nHyperparams
+        if isempty(functions{hp})
+            fromHyperprior{hp} = ...
+                random(hyperparamForms{hp},hyperparamParams{hp}{:});
+        else
+            f = functions{hp};
+            fromHyperprior{hp} = ...
+                f(random(hyperparamForms{hp},hyperparamParams{hp}{:}));
+        end
+    end
+    simprob(n,:) = pdf(priorForm,xx,fromHyperprior{:});
+    %... and plot all simulations
+    h(1) = plot(xx,simprob(n,:), ...
         'color',simPriorColor,'linewidth',linePt/2);
     h(1).Color(4) = 0.25; %transparent line
 end
-%plot the average of the simulated priors
-h(2) = plot(xx,mean(simPriorProb),'-', ...
+% ... and the average simulation
+h(2) = plot(xx,mean(simprob),'-', ...
     'color',priorColor,'linewidth',linePt*2);
 
-%~*~ reference prior ~*~
-if includeRef
-    %yes
+if includeReferencePrior
+    %~*~ ref prior ~*~
     refPrior = pdf(priorForm,xx,referenceParams{:});
     h(3) = plot(xx,refPrior, ...
         'color','k','linestyle','--','linewidth',linePt*2);
@@ -396,59 +374,34 @@ if includeRef
                 priorForm,referenceParams{:});
     %     sprintf('%i possible priors\n      from hyperpriors',NS), ...
     %     sprintf('average prior simulated\n      from hyperpriors'), ...
-    hLabels = {sprintf('%i simulated %s priors',NS,priorForm), ...
-               'average of simulated priors', ...
-               refLabel};
+    legend(h, ...
+         sprintf('%i simulated priors',NS),'average of simulated priors',refLabel, ...
+    'location',loc,'box','off')
 else
-    %none given
-    hLabels = {sprintf('%i simulated %s priors',NS,priorForm), ...
-               'average of simulated priors'};
+    legend(h, ...
+         sprintf('%i simulated priors',NS),'average of simulated priors', ...
+    'location',loc,'box','off')
 end
-legend(h,hLabels,'location','southoutside','box','off')
-
-%format
 set(gca,'fontsize',fontSz)
-set(gca,'TitleFontSizeMultiplier',tfsm,'LabelFontSizeMultiplier',lfsm)
-% tileTitle.HorizontalAlignment = 'left';
-% tileTitle.Position = [0 tileTitle.Position(2:end)];
 
 %% y-axis max
-% %replace Inf with NaN
-% simprob(simprob==Inf) = NaN; simprob(isnan(simprob)) = max(simprob(:));
-% if includeRef
-%     refPrior(refPrior==Inf) = NaN; refPrior(isnan(refPrior)) = max(refPrior(:));
-% end
-% %start with just above the average prior's max
-% avgPriorMax = max(mean(simprob))*1.5
-% ymax = avgPriorMax;
-% if includeRef
-%     refPriorMax = max(refPrior)*1.5
-%     ymax = max(refPriorMax,avgPriorMax)
-% end
-% %get a good y-limit based on the simulated priors ...
-% eachPriorMax = max(mean(simprob,2));
-% for sc = 1:6
-%     if mean(any(simprob>eachPriorMax*sc,2)) > 0.8
-%         ymax = eachPriorMax*sc;
-%         sc
-%     end
-% end
-% %... and the reference prior
-% if includeRef
-%     if ymax > max(refPrior)
-%         if ymax > max(refPrior)/6
-%             ymax = ymax/2;
-%         end
-%     else
-% %         for sc = 2:6
-% %             if ymax < max(refPrior)*sc
-% %                 ymax = max(refPrior)*sc;
-% %                 'ref'
-% %                 sc
-% %             end
-% %         end
-%     end
-% end
-% ylim([0 ymax])
+smean = max(mean(simprob));
+if mean(simprob(:)>smean) > 0.8
+    ymax = smean*2;
+end
+if includeReferencePrior
+    if smean > max(refPrior)*2.5
+        ymax = max(refPrior)*2.5;
+    else
+        ymax = max(refPrior)*1.35;
+    end
+end
+ylim([0 ymax])
+
+end
+
+
+function testNhyperparam(form)
+
 
 end

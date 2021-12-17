@@ -51,6 +51,9 @@ axes('position',[0.125 0.1 0.775 0.3+min(nChains/10,0.45)])
 hold on
 axis ij %plot top to bottom
 
+%dummyplot
+plot(-1,-1,'k')
+
 %rugplot for each chain
 leftLabels = cell([nChains 1]);
 rightLabels = cell([nChains 1]);

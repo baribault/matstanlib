@@ -6,7 +6,7 @@ function plotess(samples,diagnostics,parameterRequest,varargin)
 % (2020).  one multipanel figure is generated for each parameter instance. 
 % 
 % the three types of diagnostic ESS plots are:
-%   (1) the "efficiency per iteration" or "evolution" plot
+%   (1) the "efficiency per iteration" or 'evolution' plot
 %       >>> if the marginal posterior distribution has been efficiently
 %           explored, then ESS estimates should grow linearly with the
 %           number of samples.  
@@ -15,10 +15,10 @@ function plotess(samples,diagnostics,parameterRequest,varargin)
 %           chains are run.) 
 %         > the dashed line represents the minimum ESS, 100*(number of
 %           chains). 
-%   (2) the "efficiency of quantile estimates" or "quantile" plot
+%   (2) the "efficiency of quantile estimates" or 'quantile' plot
 %       ... which is very similar to ...
 %   (3) the "local efficiency of small-interval probability estimates" 
-%         or "local" plot 
+%         or 'local' plot 
 %       >>> visualizing whether ESS is notably lower for some quantiles or
 %           local regions (e.g., lower ESS over extreme quantiles),
 %           especially if those quantiles or intervals of quantiles seem to
@@ -226,12 +226,12 @@ if length(parameters) > maxNfigures
         length(parameters),maxNfigures,maxNfigures)
 end
 
-%a quick dummy plot (to get nicer x-axis ticks)
-dumf = figure;
-plot(1:nSamples)
-xt = get(gca,'xtick');
-if xt(1)==0, xt(1) = []; end
-close(dumf.Number)
+% % %a quick dummy plot (to get nicer x-axis ticks)
+% % dumf = figure;
+% % plot(1:nSamples)
+% % xt = get(gca,'xtick');
+% % if xt(1)==0, xt(1) = []; end
+% % close(dumf.Number)
 
 %prepare for diagnostic overlays
 %convert treedepth to an indicator of hitting max tree depth
@@ -298,10 +298,10 @@ for p = 1:min([length(parameters),maxNfigures])
   dumf = figure(999); %dummy figure to protect sizing
   f = figure('color',[1 1 1]);
   fpos = f.Position;
-  f.Position = [fpos(1:2) [50+500*nPanels 380]*figScaling];
+  f.Position = [fpos(1:2) [50+450*nPanels 380]*figScaling];
   close(dumf.Number); %close dummy figure
   %... and a layout ...
-  tiledlayout(1,nPanels,'tilespacing','compact','padding','compact');
+  t = tiledlayout(1,nPanels,'tilespacing','normal','padding','compact');
   for plt = 1:nPanels
     %account for parameters vs. parameter instances
     if isInstance(p)
@@ -311,6 +311,9 @@ for p = 1:min([length(parameters),maxNfigures])
         parameter = parameters{p};
         chains = samples.(parameter);
     end
+    t.Title.FontWeight = 'bold';
+    t.Title.Interpreter = 'none';
+    t.Title.String = parameter;
     %select plot type
     switch plotTypes{plt}
     %--------------------------------------------------------------------%
@@ -329,7 +332,8 @@ for p = 1:min([length(parameters),maxNfigures])
             for n = 1:nBatches
                 thisBatch = firstIter:lastIter(n);
                 ESSbyIter(n) = computeess(chains(thisBatch,:),ESStype);
-            end        
+            end
+            %(allow hyperefficiency)
             h(c) = plot(lastIter*nChains,ESSbyIter,'-o', ...
                 'color',ESScolors(c,:),'markerfacecolor',ESScolors(c,:), ...
                 'linewidth',linePt*2);
@@ -337,12 +341,15 @@ for p = 1:min([length(parameters),maxNfigures])
         
         %%% format
         xlim([1 nSamples])
+        xt = get(gca,'xtick');
+        xt(xt<0 | xt>nSamples) = [];
         set(gca,'xtick',xt)
+%         set(gca,'xtick',xt)
         yl = get(gca,'ylim'); yl = [0 max([yl(2) 1.1*100*nChains])]; set(gca,'ylim',yl)
         yt = get(gca,'ytick'); yt(yt<0) = []; set(gca,'ytick',yt)
         xlabel('total number of draws')
         ylabel('ESS')
-        title(parameters{p},'interpreter','none')
+        % title(parameters{p},'interpreter','none')
         legend(h,ESStypes, ...
             'location','southoutside','orientation','horizontal')
         set(gca,'fontsize',fontSz,'box','on')
@@ -360,12 +367,14 @@ for p = 1:min([length(parameters),maxNfigures])
         for n = 1:length(xQuantiles)
             ESSbyQuantile(n) = computeess(chains,'quantile',xQuantiles(n));
         end
-        plot(xQuantiles,ESSbyQuantile,'ko', ...
-            'markerfacecolor','k','markersize',markSz*0.65);
+        ESSbyQuantile = min(ESSbyQuantile,nSamples); %(no hyperefficiency)
+        plot(xQuantiles,ESSbyQuantile,'o', ...
+            'markerfacecolor','k','markeredgecolor','k', ...
+            'markersize',markSz*0.65);
         
         %%% rug plots (plot divergences, hit max treedepth) %%%
         yl = ylim; set(gca,'ylim',[0 max([nSamples yl(2)])])
-        addrugplot(nSamples,markSz,quantities, ...
+        addrugplot(chains(:),markSz,quantities, ...
                     divergent,treedepth,divergentColor,treedepthColor)
         
         %%% format
@@ -373,7 +382,7 @@ for p = 1:min([length(parameters),maxNfigures])
         yt = get(gca,'ytick'); yt(yt<0) = []; set(gca,'ytick',yt)
         xlabel('quantile')
         ylabel('ESS for quantiles')
-        title(parameters{p},'interpreter','none')
+        % title(parameters{p},'interpreter','none')
         set(gca,'fontsize',fontSz,'box','on')
         
       %------------------------------------------------------------------%
@@ -390,18 +399,30 @@ for p = 1:min([length(parameters),maxNfigures])
         for n = 1:nIntervals
             ESSbyQuantile(n) = computeess(chains,'local',xIntervals(n:n+1));
         end
-        %light vertical lines at interval borders
-        plot(xIntervalPos,repelem(ESSbyQuantile,2),'-', ...
-            'linewidth',linePt*1,'color',0.95*[1 1 1])
+        ESSbyQuantile = min(ESSbyQuantile,nSamples); %(no hyperefficiency)
+%         %light vertical lines at interval borders (from line to line)
+%         plot(xIntervalPos,repelem(ESSbyQuantile,2), ...
+%             'linewidth',0.1,'linestyle','-','color',0.85*[1 1 1])
+%         %light vertical lines at interval borders (from 0)
+%         for n = 1:nIntervals-1
+%             plot(xIntervals(n+1)*[1 1],[0 max(ESSbyQuantile(n:n+1))], ...
+%                 'linestyle',':','color',0.8*[1 1 1])
+%         end
         %horizontal over each interval
         for n = 1:nIntervals
-            plot(xIntervals(n:n+1),ESSbyQuantile(n)*[1 1],'-', ...
-                'linewidth',linePt*1.5,'color','k')
+            plot(xIntervals(n:n+1),ESSbyQuantile(n)*[1 1],'k-', ...
+                'linewidth',linePt*1.25,'color','k')
+            try %adding caps at the ends to make it look less weird ...
+                plot(xIntervals(n:n+1),ESSbyQuantile(n)*[1 1],'k', ...
+                    'linewidth',linePt*0.5,'marker','|','markersize',markSz/2)
+            catch
+                %do nothing
+            end
         end
         
         %%% rug plots (plot divergences, hit max treedepth) %%%
         yl = ylim; set(gca,'ylim',[0 max([nSamples yl(2)])])
-        addrugplot(nSamples,markSz,quantities, ...
+        addrugplot(chains(:),markSz,quantities, ...
                     divergent,treedepth,divergentColor,treedepthColor)
         
         %%% format
@@ -409,16 +430,16 @@ for p = 1:min([length(parameters),maxNfigures])
         yt = get(gca,'ytick'); yt(yt<0) = []; set(gca,'ytick',yt)
         xlabel('quantile')
         ylabel('ESS for local intervals')
-        title(parameters{p},'interpreter','none')
+        % title(parameters{p},'interpreter','none')
         set(gca,'fontsize',fontSz,'box','on')
+    end
   end
- end
 end
 
 end
 
 %% -------------------------------------------------------------------- %%
-function addrugplot(nSamples,markSz,quantities, ...
+function addrugplot(chainvec,markSz,quantities, ...
                     divergent,treedepth,divergentColor,treedepthColor)
     %%% rug plots (plot divergences, hit max treedepth) %%%
     %expand the y-axis to fit the diagnostics
@@ -438,8 +459,8 @@ function addrugplot(nSamples,markSz,quantities, ...
         end
         %convert from chains to quantiles
         qEdges = 0:0.0001:1;
-        qValues = quantile(chains(:),qEdges);
-        inQtls = discretize(chains(find(dx)),[-inf qValues(2:end-1) inf]);
+        qValues = quantile(chainvec,qEdges);
+        inQtls = discretize(chainvec(logical(dx)),[-inf qValues(2:end-1) inf]);
         %rug plot
         c = c + 1; %increment counter
         x_dx = qEdges(inQtls);

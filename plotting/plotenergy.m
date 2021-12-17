@@ -121,7 +121,7 @@ switch method
     end
     
     %format layout
-    linkaxes(ax,'x') %zooming one zooms all
+%     linkaxes(ax,'x') %zooming one zooms all
     t.XLabel.Interpreter = 'latex';
     t.XLabel.String = '$E - \bar{E}$';
     

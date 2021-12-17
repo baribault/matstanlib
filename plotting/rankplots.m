@@ -215,16 +215,17 @@ for p = 1:min([length(parameters),maxNfigures])
             'facealpha',1)
         %format
         xlim([-0.1*nSamples 1.1*nSamples]); 
-        if m==1
-            xt = get(gca,'xtick');
-            xt(xt<0) = []; xt(xt>nSamples) = [];
-        end    
-        set(gca,'xtick',xt)          %x-axis ticks are same for all
         ax(m).YAxis.Visible = 'off'; %y-axis is uninformative
         % xlabel('rank')
         % xlabel(sprintf('chain %i',m))
         title(sprintf('chain %i',m),'fontweight','normal')
         set(gca,'fontsize',fontSz)
+        %LAST ORDER OF BUSINESS is xticks; otherwise yucky angles
+        if m==1
+            xt = get(gca,'xtick');
+            xt(xt<0 | xt>nSamples) = [];
+        end    
+        set(gca,'xtick',xt)          %x-axis ticks are same for all
     end
     linkaxes(ax,'x') %zooming one zooms all
     

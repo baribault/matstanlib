@@ -1,4 +1,4 @@
-function parallelsamples(samples,diagnostics,parameterRequest)
+function parallelsamples(samples,diagnostics,parameterRequest,zScore)
 %PARALLELSAMPLES creates a parallel coordinate plot and highlights divergences. 
 % 
 % this function generates a single plot in which each line represents the 
@@ -18,11 +18,19 @@ function parallelsamples(samples,diagnostics,parameterRequest)
 % plot. if parameters of interest are on very different scales, try 
 % plotting pairs of parameters instead of more numerous groups. 
 % 
-% PARALLELSAMPLES(SAMPLES,DIAGNOSTICS,PARMAETERREQUEST)
+% PARALLELSAMPLES(SAMPLES,DIAGNOSTICS,PARMAETERREQUEST,ZSCORE)
 %   it will usually be useful (& necessary) to call this function with the
 %   optional input PARAMETERREQUEST, a cell of parameter instance name 
 %   strings.  if a parameter name string is included in PARAMETERREQUEST,
 %   it will be expanded to parameter instance names.  
+%   if PARAMETERREQUEST is empty, all parameter instaces will be plotted.
+%   
+%   if parameters are on rather different scales, ZSCORE may be used to
+%   normalize the samples for each parameter instance before plotting.  
+%   if ZSCORE is true or 1, then z-scores will be shown.
+%   if ZSCORE is false or 0, then the raw posterior samples will be shown. 
+%   the default value for ZSCORE is false.
+% 
 % 
 % See also TRACEDENSITY, EXTRACTSAMPLES
 % 
@@ -31,27 +39,34 @@ function parallelsamples(samples,diagnostics,parameterRequest)
 msl.options
 
 %% parse inputs
+%samples
 if ~isstruct(samples)
     error(['first input must be a structure of MCMC samples ' ...
         '(consisitent with the output of extractsamples.m).'])
 end
+%diagnostics
 if ~isstruct(diagnostics)
     error(['second input must be a structure of diagnostic quantities ' ...
         '(consisitent with the output of extractsamples.m).'])
 end
-if nargin == 2
+%parameterRequest
+if nargin <3 || isempty(parameterRequest)
     parameterRequest = fieldnames(samples);
-elseif nargin > 2
-    if isempty(parameterRequest)
-        parameterRequest = fieldnames(samples);
-    elseif ~(iscell(parameterRequest) && all(cellfun(@ischar,parameterRequest)))
-        if ischar(parameterRequest)
-            parameterRequest = {parameterRequest};
-        else
-            error(['parameter names must be input as a string or ' ...
-                   'cell of strings.'])
-        end
-    end
+elseif ischar(parameterRequest)
+    parameterRequest = {parameterRequest};
+elseif ~iscell(parameterRequest) || ~all(cellfun(@ischar,parameterRequest))
+    error(['parameter names must be input as a string or ' ...
+       'cell of strings.'])
+end
+%zScore
+if nargin < 4 || isempty(zScore)
+    zScore = false;
+elseif ~isscalar(zScore) || ~ismember(zScore,[0 1])
+    error('zScore input must be true, 1, false, or 0.')
+end
+
+if nargin > 4
+    error('too many inputs.')
 end
 
 %% create a list of parameter instances
@@ -66,6 +81,25 @@ if length(parameters) == 1
 elseif length(parameters) > 20
     error(['too many parameters to plot (> 20).  try changing the ' ...
         'parameterRequest input to be more restrictive.'])
+end
+
+%if z-scoring, grab the necessary summary stats for each parameter first
+if zScore
+    zMean = NaN([nParameters 1]);
+    zSd   = NaN([nParameters 1]);
+        for p = 1:nParameters
+            %account for parameters vs. parameter instances
+            if isInstance(p)
+                [parameter,ind] = str2ind(parameters{p});
+                chains = samples.(parameter)(:,:,ind{:});
+                zMean(p) = mean(chains(:));
+                zSd(p)   = std(chains(:));
+            else
+                parameter = parameters{p};
+                zMean(p) = mean(samples.(parameter)(:));
+                zSd(p)   = std(samples.(parameter)(:));
+            end
+        end
 end
 
 %% make parallel coordinates plot
@@ -103,6 +137,9 @@ for nplot = 1:2
                 parameter = parameters{p};
                 valuesAtSample(p) = samples.(parameter)(sample{:});
             end
+            if zScore
+                valuesAtSample(p) = (valuesAtSample(p)-zMean(p))/zSd(p);
+            end
         end
         %plot all parameter values at current sample
         plot(1:nParameters,valuesAtSample,'color',color)
@@ -113,5 +150,16 @@ set(gca,'xlim',[0.9 nParameters+0.1], ...
     'xtick',1:nParameters,'xticklabel',parameters, ...
     'ticklabelinterpreter','none')
 set(gca,'ygrid','on','box','on','fontsize',fontSz)
+
+if zScore
+%     ylabel('z score')
+    yt = get(gca,'ytick');
+    is0 = (yt==0);
+    yt = cellfun(@num2str,num2cell(yt),'uni',0);
+    if sum(is0)==1,	yt{is0} = ['z = ' yt{is0}];
+    else,           yt{end} = ['z = ' yt{end}];
+    end
+    set(gca,'yticklabels',yt)
+end
 
 end
